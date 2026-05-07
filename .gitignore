@@ -1,0 +1,5 @@
+.vscode/
+build/
+
+.claude/
+CLAUDE.md
