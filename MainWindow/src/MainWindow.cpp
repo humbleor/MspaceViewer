@@ -124,52 +124,38 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
 
 void MainWindow::HiddenData(QStandardItem* item)
 {
-    Qt::CheckState state = item->checkState();
+    auto it = _itemToPointCloud.find(item);
+    if (it == _itemToPointCloud.end())
+        return;
 
-    if (dynamic_cast<osg::MSpaceNode*>(_itemToPointCloud[item].get()))
+    Qt::CheckState state = item->checkState();
+    osg::ref_ptr<osg::Node> node = it->second;
+    if (!node.valid())
+        return;
+
+    if (state == Qt::Checked)
     {
-        osg::ref_ptr<osg::MSpaceNode> showOrHidden = dynamic_cast<osg::MSpaceNode*>(_itemToPointCloud[item].get());
-        if (state == Qt::Checked)
-        {
-            //显示osg中对应的数据
-            showOrHidden->setNodeMask(1);
-            ui._Logger->insertPlainText(QStringLiteral("The data has been shown！\n"));
-        }
-        else
-        {
-            //隐藏osg中对应的数据
-            showOrHidden->setNodeMask(0);
-            ui._Logger->insertPlainText(QStringLiteral("The data has been hidden！\n"));
-        }
+        node->setNodeMask(0xFFFFFFFF);
+        ui._Logger->insertPlainText(QStringLiteral("The data \"%1\" has been shown！\n").arg(item->text()));
     }
     else
     {
-        osg::ref_ptr<osg::Group> showOrHidden = _itemToPointCloud[item];
-        if (state == Qt::Checked)
-        {
-            //显示osg中对应的数据
-            showOrHidden->setNodeMask(1);
-            //ui._Logger->insertPlainText(QStringLiteral("显示数据！\n"));
-        }
-        else
-        {
-            //隐藏osg中对应的数据
-            showOrHidden->setNodeMask(0);
-            //ui._Logger->insertPlainText(QStringLiteral("隐藏数据！\n"));
-        }
+        node->setNodeMask(0);
+        ui._Logger->insertPlainText(QStringLiteral("The data \"%1\" has been hidden！\n").arg(item->text()));
     }
-
-
 }
 
 void MainWindow::handleContextMenuRequested(const QPoint& pos)
 {
     QModelIndex index = ui._fileTree->indexAt(pos);
 
-    // 如果选中的项有效，则显示右键菜单
     if (index.isValid())
     {
-        _dataMangementMenu->exec(ui._fileTree->viewport()->mapToGlobal(pos));
+        QStandardItem* item = _rootNode->itemFromIndex(index);
+        if (item != nullptr && _itemToPointCloud.count(item) > 0)
+        {
+            _dataMangementMenu->exec(ui._fileTree->viewport()->mapToGlobal(pos));
+        }
     }
 }
 
@@ -178,33 +164,28 @@ void MainWindow::DeleteData()
     QModelIndex currentIndex = ui._fileTree->currentIndex();
 
     QStandardItem* item = _rootNode->itemFromIndex(currentIndex);
-    if (item != nullptr)
-    {
-        ////删除osg中对应的数据
-        //ui._Logger->insertPlainText(_rootNode->itemFromIndex(currentIndex)->text() + "selected!\n");
-        if (dynamic_cast<osg::MSpaceNode*>(_itemToPointCloud[item].get()))
-        {
-            osg::ref_ptr<osg::MSpaceNode> deleteNode = dynamic_cast<osg::MSpaceNode*>(_itemToPointCloud[item].get());
-            //设计一个获取点云名称的函数
-            _formSettings->deletePointCloudNode(deleteNode, "./tmp/" + deleteNode->getName());
-        }
-        else
-        {
-            //osg::ref_ptr<osg::Group> deleteNode = _itemToPointCloud[item];
-            //_formSettings->deeteTreeNode(deleteNode);
-        }
-        _itemToPointCloud.erase(item);
-        _rootNode->removeRow(item->row());
-        //ngdelete item;
-        //ui._Logger->insertPlainText(QStringLiteral("删除数据！"));
-    }
-    else
+    if (item == nullptr)
     {
         ui._Logger->insertPlainText(tr("Unable to delete node！") + "\n");
+        return;
     }
 
+    auto it = _itemToPointCloud.find(item);
+    if (it == _itemToPointCloud.end())
+    {
+        ui._Logger->insertPlainText(tr("Unable to delete node ！") + "\n");
+        return;
+    }
 
+    osg::ref_ptr<osg::MSpaceNode> deleteNode = dynamic_cast<osg::MSpaceNode*>(it->second.get());
+    if (deleteNode.valid())
+    {
+        _formSettings->deletePointCloudNode(deleteNode, "./tmp/" + deleteNode->getName());
+        ui._Logger->insertPlainText(QStringLiteral("The node \"%1\" has been deleted！\n").arg(deleteNode->getName().c_str()));
+    }
 
+    _itemToPointCloud.erase(it);
+    _rootNode->removeRow(item->row());
 }
 
 void MainWindow::loadFile()

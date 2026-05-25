@@ -396,14 +396,15 @@ inline shared_ptr<Buffer> readBinaryFile(string path) {
 
 inline vector<uint8_t> readBinaryFile(string path, uint64_t start, uint64_t size) {
 
-	//ifstream file(path, ios::binary);	
-	
+	//ifstream file(path, ios::binary);
 	// the fopen version seems to be quite a bit faster than ifstream
 	auto file = fopen(path.c_str(), "rb");
+	if (!file) return vector<uint8_t>();
 
 	auto totalSize = fs::file_size(path);
 
 	if (start >= totalSize) {
+		fclose(file);
 		return vector<uint8_t>();
 	}if (start + size > totalSize) {
 		auto clampedSize = totalSize - start;
@@ -430,10 +431,12 @@ inline vector<uint8_t> readBinaryFile(string path, uint64_t start, uint64_t size
 
 inline void readBinaryFile(string path, uint64_t start, uint64_t size, void* target) {
 	auto file = fopen(path.c_str(), "rb");
+	if (!file) return;
 
 	auto totalSize = fs::file_size(path);
 
 	if (start >= totalSize) {
+		fclose(file);
 		return;
 	}if (start + size > totalSize) {
 		auto clampedSize = totalSize - start;

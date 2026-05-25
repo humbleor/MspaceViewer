@@ -9,26 +9,26 @@
 #include <boost/thread/thread.hpp>
 #include <pcl/segmentation/supervoxel_clustering.h>
 #include <pcl/common/pca.h>
-#include <pcl/features/normal_3d.h>                // ���㷨����
-#include <pcl/ModelCoefficients.h>                 // ģ��ϵ��
-#include <pcl/sample_consensus/ransac.h>           // RANSAC
-#include <pcl/sample_consensus/method_types.h>     // ����������Ʒ���
-#include <pcl/sample_consensus/model_types.h>      // ģ�Ͷ���
-#include <pcl/segmentation/sac_segmentation.h>     // RANSAC�ָ�
-#include <pcl/sample_consensus/sac_model_cylinder.h>// Բ��
+#include <pcl/features/normal_3d.h>
+#include <pcl/ModelCoefficients.h>
+#include <pcl/sample_consensus/ransac.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/sample_consensus/sac_model_cylinder.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/common/transforms.h>  
 #include <pcl/registration/transformation_estimation_svd.h> //svd
-#include <pcl/registration/icp.h> // icp�㷨
+#include <pcl/registration/icp.h>
 #include <pcl/features/normal_3d_omp.h>
-#include <pcl/filters/random_sample.h>//��ȡ�̶������ĵ���
+#include <pcl/filters/random_sample.h>
 #include <pcl/filters/passthrough.h>
-#include <pcl/filters/uniform_sampling.h> // ���Ȳ���
+#include <pcl/filters/uniform_sampling.h>
 #include <fstream>
-#include <pcl/registration/ndt.h>               // NDT��׼
-#include <pcl/filters/approximate_voxel_grid.h> // �����˲�
-#include <pcl/features/fpfh_omp.h> //fpfh���ټ����omp(��˲��м���)
+#include <pcl/registration/ndt.h>
+#include <pcl/filters/approximate_voxel_grid.h>
+#include <pcl/features/fpfh_omp.h>
 
 using namespace std;
 

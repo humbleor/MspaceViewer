@@ -1,5 +1,12 @@
 #include "../include/RegistrationForm_TLS.h"
 
+static void logToLogger(QTextEdit* logger, const QString& text)
+{
+	QMetaObject::invokeMethod(logger, [logger, text]() {
+		logger->insertPlainText(text);
+	}, Qt::QueuedConnection);
+}
+
 RegistrationForm_TLS::RegistrationForm_TLS(QWidget* parent)
 	:QDialog(parent),
 	Ui::TLSRegistration()
@@ -48,7 +55,31 @@ void RegistrationForm_TLS::selectOutputDir()
 
 void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
 {
-	// To be implemented
+	if (_sector_num->text().isEmpty() ||
+		_resolution_Radius->text().isEmpty() ||
+		_maxRadius->text().isEmpty() ||
+		_minRadius->text().isEmpty() ||
+		_error_dis->text().isEmpty() ||
+		_error_ang->text().isEmpty() ||
+		_error_z->text().isEmpty() ||
+		_pointsConstrain->text().isEmpty() ||
+		_zConstrain->text().isEmpty())
+		return;
+
+	TLSRegParams params;
+	params.sourceFile = _inputFileOfSource->text();
+	params.targetFile = _inputFileOfTarget->text();
+	params.outputDir = _outputFileOfDir->text();
+	params.sector_num = _sector_num->text().toInt();
+	params.resolution_Radius = _resolution_Radius->text().toFloat();
+	params.maxRadius = _maxRadius->text().toFloat();
+	params.minRadius = _minRadius->text().toFloat();
+	params.error_dis = _error_dis->text().toFloat();
+	params.error_ang = _error_ang->text().toFloat();
+	params.error_z = _error_z->text().toFloat();
+	params.pointsConstrain = _pointsConstrain->text().toUInt();
+	params.zConstrain = _zConstrain->text().toFloat();
+
 	if (progress)
 	{
 		progress->setLabelText(tr("Performing point cloud registration ..."));
@@ -57,7 +88,7 @@ void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextE
 		progress->show();
 		progress->raise();
 	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationForm_TLS::registration, this, logger));
+	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationForm_TLS::registration, this, params, logger));
 	while (!future.isFinished())
 	{
 		if (progress)
@@ -70,12 +101,12 @@ void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextE
 
 void RegistrationForm_TLS::apply()
 {
-	this->done(QDialog::Accepted); // »òÕßÖ±½Ó this->accept();
+	this->done(QDialog::Accepted); // ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ this->accept();
 }
 
 void RegistrationForm_TLS::reject()
 {
-	this->done(QDialog::Rejected); // »òÕßÖ±½Ó this->reject();
+	this->done(QDialog::Rejected); // ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ this->reject();
 }
 
 void RegistrationForm_TLS::initParam()
@@ -93,52 +124,41 @@ void RegistrationForm_TLS::initParam()
 	_zConstrain->setText("0.2");
 }
 
-void RegistrationForm_TLS::registration(QTextEdit* logger)
+void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 {
-	if (_sector_num->text().isEmpty() ||
-		_resolution_Radius->text().isEmpty() ||
-		_maxRadius->text().isEmpty() ||
-		_minRadius->text().isEmpty() ||
-		_error_dis->text().isEmpty() ||
-		_error_ang->text().isEmpty() ||
-		_error_z->text().isEmpty() ||
-		_pointsConstrain->text().isEmpty() ||
-		_zConstrain->text().isEmpty())
-		return;
-
 	pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(_inputFileOfSource->text().toStdString(), *source_cloud) == -1)
+	if (pcl::io::loadPCDFile<pcl::PointXYZ>(params.sourceFile.toStdString(), *source_cloud) == -1)
 	{
-		logger->insertPlainText(tr("Failed to load source point cloud file!") + "\n");
+		logToLogger(logger, tr("Failed to load source point cloud file!") + "\n");
 		return;
 	}
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(_inputFileOfTarget->text().toStdString(), *target_cloud) == -1)
+	if (pcl::io::loadPCDFile<pcl::PointXYZ>(params.targetFile.toStdString(), *target_cloud) == -1)
 	{
-		logger->insertPlainText(tr("Failed to load target point cloud file!") + "\n");
+		logToLogger(logger, tr("Failed to load target point cloud file!") + "\n");
 		return;
 	}
 
-	int num_sectors = _sector_num->text().toInt();
-	float R_neighbor = _maxRadius->text().toFloat();
-	float r_neighbor = _minRadius->text().toFloat();
-	float dR = _resolution_Radius->text().toFloat();
+	int num_sectors = params.sector_num;
+	float R_neighbor = params.maxRadius;
+	float r_neighbor = params.minRadius;
+	float dR = params.resolution_Radius;
 	float Step = dR;
 
-	float corr_canshu1 = _error_dis->text().toFloat();
-	float corr_canshu2 = _error_z->text().toFloat();
-	float corr_canshu3 = _error_ang->text().toFloat();
+	float corr_canshu1 = params.error_dis;
+	float corr_canshu2 = params.error_z;
+	float corr_canshu3 = params.error_ang;
 
-	unsigned int icp_canshu1 = _pointsConstrain->text().toUInt();
-	float icp_canshu2 = _zConstrain->text().toFloat();
+	unsigned int icp_canshu1 = params.pointsConstrain;
+	float icp_canshu2 = params.zConstrain;
 
-	//------------------------------------------µ÷²ÎÇø------------------------------------------
+	//------------------------------------------ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½------------------------------------------
 	int num_combinations = num_sectors * num_sectors;
 	vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> target_rhombus_pointclouds;
 	target_rhombus_pointclouds = compute_rhombus_pointclouds(target_cloud, R_neighbor, num_sectors);
 	vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> source_rhombus_pointclouds;
 	source_rhombus_pointclouds = compute_rhombus_pointclouds(source_cloud, R_neighbor, num_sectors);
-	int fault_tolerant_iterations = 2;//³£Á¿ ÁâÐÎÇøÓò¶ÔÓ¦¹ØÏµ¶ÔÓ¦Ê±Ê¹ÓÃ
+	int fault_tolerant_iterations = 2;//ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½Ïµï¿½ï¿½Ó¦Ê±Ê¹ï¿½ï¿½
 	std::vector <vector<vector<pcl::PointXYZ>>> target_rhombus_descriptors(num_sectors);
 	std::vector <vector<vector<pcl::PointXYZ>>> source_rhombus_descriptors(num_sectors);
 	float dTheta = 360.0 / num_sectors;
@@ -157,7 +177,7 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 	std::vector<std::vector<int>> corr(num_combinations, std::vector<int>(2));
 	vector<float> score(num_combinations, 10.0);
 	vector<float> Diff_Zt_Zs(num_combinations, 0.0);//Zt_Zs
-	vector<float> Diff_Lts(num_combinations, 0.0);//xoyÆ½ÃæÉÏµÄÆ½ÒÆ³¤¶È
+	vector<float> Diff_Lts(num_combinations, 0.0);//xoyÆ½ï¿½ï¿½ï¿½Ïµï¿½Æ½ï¿½Æ³ï¿½ï¿½ï¿½
 
 	for (size_t ii = 0; ii < num_dR; ii++)
 	{
@@ -210,8 +230,8 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 
 						}
 						size_t min_index = std::min_element(neighbor_DiffD.begin() + index, neighbor_DiffD.begin() + index + fault_tolerant_iterations) - neighbor_DiffD.begin();
-						//»ñÈ¡×îÐ¡ÖµË÷Òý
-						if (neighbor_DiffD[min_index] <= 0.05)  //ºÃÏñ¶¼Ð¡ÓÚ0.12×óÓÒ
+						//ï¿½ï¿½È¡ï¿½ï¿½Ð¡Öµï¿½ï¿½ï¿½ï¿½
+						if (neighbor_DiffD[min_index] <= 0.05)  //ï¿½ï¿½ï¿½ï¿½Ð¡ï¿½ï¿½0.12ï¿½ï¿½ï¿½ï¿½
 						{
 							sum_dz += neighbor_DZ[min_index];
 							sum_dl += neighbor_Dist[min_index];
@@ -236,8 +256,8 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 			}
 		}
 
-		auto smallest = std::min_element(std::begin(score), std::end(score));                   //»ñÈ¡×îÐ¡ÖµÖ¸Õë
-		int nMinIndex = std::distance(std::begin(score), smallest);                             //»ñÈ¡×îÐ¡ÖµË÷Òý
+		auto smallest = std::min_element(std::begin(score), std::end(score));                   //ï¿½ï¿½È¡ï¿½ï¿½Ð¡ÖµÖ¸ï¿½ï¿½
+		int nMinIndex = std::distance(std::begin(score), smallest);                             //ï¿½ï¿½È¡ï¿½ï¿½Ð¡Öµï¿½ï¿½ï¿½ï¿½
 		corr_dR[ii][0] = corr[nMinIndex][0] * dTheta;//i j l dz
 		corr_dR[ii][1] = corr[nMinIndex][1] * dTheta;//i j l dz
 		corr_dR[ii][2] = Diff_Lts[nMinIndex];//i j l dz
@@ -256,9 +276,9 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 	}
 
 
-	auto lest = std::min_element(std::begin(std_dR), std::end(std_dR));                   //»ñÈ¡×îÐ¡ÖµÖ¸Õë  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
-	int minIndex = std::distance(std::begin(std_dR), lest);                             //»ñÈ¡×îÐ¡ÖµË÷Òý
-	logger->insertPlainText(tr("minIndex:") + QString::number(minIndex) + "\n");
+	auto lest = std::min_element(std::begin(std_dR), std::end(std_dR));                   //ï¿½ï¿½È¡ï¿½ï¿½Ð¡ÖµÖ¸ï¿½ï¿½  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
+	int minIndex = std::distance(std::begin(std_dR), lest);                             //ï¿½ï¿½È¡ï¿½ï¿½Ð¡Öµï¿½ï¿½ï¿½ï¿½
+	logToLogger(logger, tr("minIndex:") + QString::number(minIndex) + "\n");
 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr source(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr target(new pcl::PointCloud<pcl::PointXYZ>);
@@ -269,15 +289,15 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 
 	//std::cout << "T-Idx:" << corr_dR[minIndex][0] << " S-Idx:" << corr_dR[minIndex][1] << endl;
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
-	vg.setInputCloud(sourceOverlapAll);             // ÊäÈëµãÔÆ
-	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ÉèÖÃ×îÐ¡ÌåËØ±ß³¤
-	vg.filter(*source);          // ½øÐÐÂË²¨
-	vg.setInputCloud(targetOverlapAll);             // ÊäÈëµãÔÆ
-	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ÉèÖÃ×îÐ¡ÌåËØ±ß³¤
+	vg.setInputCloud(sourceOverlapAll);             // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¡ï¿½ï¿½ï¿½Ø±ß³ï¿½
+	vg.filter(*source);          // ï¿½ï¿½ï¿½ï¿½ï¿½Ë²ï¿½
+	vg.setInputCloud(targetOverlapAll);             // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¡ï¿½ï¿½ï¿½Ø±ß³ï¿½
 	vg.filter(*target);
 	/*cout << "source_cloud after filtering: " << source->size() << endl;
 	cout << "target_cloud after filtering: " << target->size() << endl;*/
-	//---------------¼ÆËãÔ´µãÔÆºÍÄ¿±êµãÔÆµÄFPFH------------------------
+	//---------------ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½Æºï¿½Ä¿ï¿½ï¿½ï¿½ï¿½Æµï¿½FPFH------------------------
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
 	pcl::PointCloud<pcl::Normal>::Ptr source_normals(new pcl::PointCloud<pcl::Normal>);
 	pcl::PointCloud<pcl::Normal>::Ptr target_normals(new pcl::PointCloud<pcl::Normal>);
@@ -365,8 +385,8 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 			iteration_ransac += 1;
 		}
 	}
-	auto lest_ransac = std::min_element(std::begin(score_ransac), std::end(score_ransac));                   //»ñÈ¡×îÐ¡ÖµÖ¸Õë  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
-	int minIndex_ransac = std::distance(std::begin(score_ransac), lest_ransac);                             //»ñÈ¡×îÐ¡ÖµË÷Òý
+	auto lest_ransac = std::min_element(std::begin(score_ransac), std::end(score_ransac));                   //ï¿½ï¿½È¡ï¿½ï¿½Ð¡ÖµÖ¸ï¿½ï¿½  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
+	int minIndex_ransac = std::distance(std::begin(score_ransac), lest_ransac);                             //ï¿½ï¿½È¡ï¿½ï¿½Ð¡Öµï¿½ï¿½ï¿½ï¿½
 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_src(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::transformPointCloud(*sourceOverlapAll, *transformed_src, Transform_ransac[minIndex_ransac]);
@@ -416,62 +436,62 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 
 	Eigen::Matrix4f transformation_matrix1;
 
-	//-----------------Æ´½ÓµãÔÆÓë·¨ÏßÐÅÏ¢-------------------
+	//-----------------Æ´ï¿½Óµï¿½ï¿½ï¿½ï¿½ë·¨ï¿½ï¿½ï¿½ï¿½Ï¢-------------------
 	pcl::PointCloud<pcl::PointNormal>::Ptr source_with_normals(new pcl::PointCloud<pcl::PointNormal>);
 	cloud_with_normal(overlapTransformed_src, source_with_normals);
 	pcl::PointCloud<pcl::PointNormal>::Ptr target_with_normals(new pcl::PointCloud<pcl::PointNormal>);
 	cloud_with_normal(overlap_tgt, target_with_normals);
-	//----------------µãµ½ÃæµÄicp£¨¾­µä°æ£©-----------------
+	//----------------ï¿½ãµ½ï¿½ï¿½ï¿½icpï¿½ï¿½ï¿½ï¿½ï¿½ï¿½æ£©-----------------
 	pcl::IterativeClosestPointWithNormals<pcl::PointNormal, pcl::PointNormal>p_icp;
 	p_icp.setInputSource(source_with_normals);
 	p_icp.setInputTarget(target_with_normals);
-	p_icp.setTransformationEpsilon(1e-10);    // ÎªÖÕÖ¹Ìõ¼þÉèÖÃ×îÐ¡×ª»»²îÒì
-	p_icp.setMaxCorrespondenceDistance(0.03);   // ÉèÖÃ¶ÔÓ¦µã¶ÔÖ®¼äµÄ×î´ó¾àÀë£¨´ËÖµ¶ÔÅä×¼½á¹ûÓ°Ïì½Ï´ó£©¡£
-	p_icp.setEuclideanFitnessEpsilon(0.0001);  // ÉèÖÃÊÕÁ²Ìõ¼þÊÇ¾ù·½Îó²îºÍÐ¡ÓÚãÐÖµ£¬ Í£Ö¹µü´ú£»
-	//p_icp.setUseSymmetricObjective(true);   // ÉèÖÃÎªtrueÔò±äÎªÁíÒ»¸öËã·¨
-	p_icp.setMaximumIterations(35);           // ×î´óµü´ú´ÎÊý
+	p_icp.setTransformationEpsilon(1e-10);    // Îªï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¡×ªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	p_icp.setMaxCorrespondenceDistance(0.03);   // ï¿½ï¿½ï¿½Ã¶ï¿½Ó¦ï¿½ï¿½ï¿½Ö®ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë£¨ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½×¼ï¿½ï¿½ï¿½Ó°ï¿½ï¿½Ï´ó£©¡ï¿½
+	p_icp.setEuclideanFitnessEpsilon(0.0001);  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¡ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ Í£Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	//p_icp.setUseSymmetricObjective(true);   // ï¿½ï¿½ï¿½ï¿½Îªtrueï¿½ï¿½ï¿½Îªï¿½ï¿½Ò»ï¿½ï¿½ï¿½ã·¨
+	p_icp.setMaximumIterations(35);           // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	pcl::PointCloud<pcl::PointNormal>::Ptr p_icp_cloud(new pcl::PointCloud<pcl::PointNormal>);
 	p_icp.align(*p_icp_cloud);
 
 	transformation_matrix1 = p_icp.getFinalTransformation();
 	transformation_matrix1 = transformation_matrix1 * Transform_ransac[minIndex_ransac];
 
-	logger->insertPlainText(tr("The Fine Registration finished!") + "\n");
-	logger->insertPlainText(tr("Point cloud registration completed!") + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
-	logger->insertPlainText(tr("Transformation Matrix:") + "\n");
+	logToLogger(logger, tr("The Fine Registration finished!") + "\n");
+	logToLogger(logger, tr("Point cloud registration completed!") + "\n");
+	logToLogger(logger, tr("===================================") + "\n");
+	logToLogger(logger, tr("Transformation Matrix:") + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix1(0, 0), 'f', 6) + "\t" +
+	logToLogger(logger, QString::number(transformation_matrix1(0, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(0, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(0, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(0, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix1(1, 0), 'f', 6) + "\t" +
+	logToLogger(logger, QString::number(transformation_matrix1(1, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(1, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(1, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(1, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix1(2, 0), 'f', 6) + "\t" +
+	logToLogger(logger, QString::number(transformation_matrix1(2, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(2, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(2, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(2, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix1(3, 0), 'f', 6) + "\t" +
+	logToLogger(logger, QString::number(transformation_matrix1(3, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(3, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(3, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix1(3, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLogger(logger, tr("===================================") + "\n");
 
-	std::filesystem::path sourcePath(_inputFileOfSource->text().toStdString());
-	std::filesystem::path targetPath(_inputFileOfTarget->text().toStdString());
+	std::filesystem::path sourcePath(params.sourceFile.toStdString());
+	std::filesystem::path targetPath(params.targetFile.toStdString());
 
-	std::string outputDir = _outputFileOfDir->text().toStdString();
+	std::string outputDir = params.outputDir.toStdString();
 	std::ofstream dataOut(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt");
 
 	if (!dataOut)
 	{
-		logger->insertPlainText(tr("Failed to create transformation matrix file!") + "\n");
+		logToLogger(logger, tr("Failed to create transformation matrix file!") + "\n");
 		return;
 	}
 
@@ -482,7 +502,7 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 	dataOut << transformation_matrix1(3, 0) << "\t" << transformation_matrix1(3, 1) << "\t" << transformation_matrix1(3, 2) << "\t" << transformation_matrix1(3, 3) << "\n";
 	dataOut.close();
 
-	logger->insertPlainText(tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt") + "\n");
+	logToLogger(logger, tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt") + "\n");
 
 
 	pcl::transformPointCloud(*source_cloud, *target_cloud, transformation_matrix1);
@@ -491,7 +511,7 @@ void RegistrationForm_TLS::registration(QTextEdit* logger)
 
 	pcl::io::savePCDFileBinary(outputSource, *target_cloud);
 
-	logger->insertPlainText(tr("Registered point cloud saved to: ") + QString::fromStdString(outputSource) + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLogger(logger, tr("Registered point cloud saved to: ") + QString::fromStdString(outputSource) + "\n");
+	logToLogger(logger, tr("===================================") + "\n");
 }
 

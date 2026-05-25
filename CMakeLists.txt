@@ -9,9 +9,9 @@ set(CMAKE_AUTORCC ON)
 
 # ── 依赖根目录（find_package 找不到时的回退路径）──
 set(DEP_ROOT "D:/vcpkg/installed/x64-windows" CACHE PATH "Fallback root directory for dependencies")
+list(APPEND CMAKE_PREFIX_PATH "${DEP_ROOT}")
 
 # ── Qt5 ──
-# 独立安装：-DCMAKE_PREFIX_PATH=D:/Qt/5.15.2/msvc2019_64
 find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets Concurrent Core Gui OpenGL)
 set(QT_LIB_PREFIX "Qt5")
 

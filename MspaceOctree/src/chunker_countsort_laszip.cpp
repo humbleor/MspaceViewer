@@ -272,7 +272,7 @@ namespace chunker_countsort_laszip {
 
 			//cout << ("end: " + formatNumber(dbgCurr)) << endl;
 		};
-		std::cout<< "numChunkerThreads:"<<numChunkerThreads<<std::endl;
+		std::cout<< "numChunkerThreads: "<<numChunkerThreads<<std::endl;
 		TaskPool<Task> pool(numChunkerThreads, processor);
 
 		auto tStartTaskAssembly = now();
@@ -286,7 +286,7 @@ namespace chunker_countsort_laszip {
 			//laszip_point* point;
 			{
 				laszip_create(&laszip_reader);
-				std::cout<<"source.path"<<source.path<<std::endl;
+				std::cout<<"source.path: "<<source.path<<std::endl;
 				laszip_BOOL request_reader = 1;
 				laszip_BOOL is_compressed = iEndsWith(source.path, ".laz") ? 1 : 0;
 

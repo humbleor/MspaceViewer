@@ -1,5 +1,12 @@
 #include "../include/OutlierRemovalRegistration.h"
 
+static void logToLoggerORR(QTextEdit* logger, const QString& text)
+{
+	QMetaObject::invokeMethod(logger, [logger, text]() {
+		logger->insertPlainText(text);
+	}, Qt::QueuedConnection);
+}
+
 OutlierRemovalRegistration::OutlierRemovalRegistration(QWidget* parent)
 	:QDialog(parent),
 	Ui::OutliersRemovalRegistration()
@@ -46,9 +53,26 @@ void OutlierRemovalRegistration::selectOutputDir()
 	_outputFileOfDir->setText(dir);
 }
 
+struct ORRRegParams {
+	QString sourceFile;
+	QString targetFile;
+	QString outputDir;
+	bool isCenter;
+	float resolution_dis;
+};
+
 void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
 {
-	// To be implemented
+	ORRRegParams params;
+	params.sourceFile = _inputFileOfSource->text();
+	params.targetFile = _inputFileOfTarget->text();
+	params.outputDir = _outputFileOfDir->text();
+	params.isCenter = _isCenter->isChecked();
+	params.resolution_dis = _resolution_dis->text().isEmpty() ? 0.0f : _resolution_dis->text().toFloat();
+
+	if (params.resolution_dis == 0.0f)
+		return;
+
 	if (progress)
 	{
 		progress->setLabelText(tr("Performing point cloud registration ..."));
@@ -57,7 +81,7 @@ void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, 
 		progress->show();
 		progress->raise();
 	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&OutlierRemovalRegistration::registration, this, logger));
+	QFuture<void> future = QtConcurrent::run(std::bind(&OutlierRemovalRegistration::registration, this, params, logger));
 	while (!future.isFinished())
 	{
 		if (progress)
@@ -70,12 +94,12 @@ void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, 
 
 void OutlierRemovalRegistration::apply()
 {
-	this->done(QDialog::Accepted); // »òÕßÖ±½Ó this->accept();
+	this->done(QDialog::Accepted); // ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ this->accept();
 }
 
 void OutlierRemovalRegistration::reject()
 {
-	this->done(QDialog::Rejected); // »òÕßÖ±½Ó this->reject();
+	this->done(QDialog::Rejected); // ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ this->reject();
 }
 
 void OutlierRemovalRegistration::initParam()
@@ -83,15 +107,13 @@ void OutlierRemovalRegistration::initParam()
 	_resolution_dis->setText("0.1");
 }
 
-void OutlierRemovalRegistration::registration(QTextEdit* logger)
+void OutlierRemovalRegistration::registration(ORRRegParams params, QTextEdit* logger)
 {
-	bool isCenter = _isCenter->isChecked();
-	if (_resolution_dis->text().isEmpty())
-		return;
-	float resolution = _resolution_dis->text().toFloat();
+	bool isCenter = params.isCenter;
+	float resolution = params.resolution_dis;
 
-	std::string sourceFile = _inputFileOfSource->text().toStdString();
-	std::string targetFile = _inputFileOfTarget->text().toStdString();
+	std::string sourceFile = params.sourceFile.toStdString();
+	std::string targetFile = params.targetFile.toStdString();
 
 	PointCloudPtr sampledCloudS(new pcl::PointCloud<pcl::PointXYZ>);
 	PointCloudPtr sampledCloudT(new pcl::PointCloud<pcl::PointXYZ>);
@@ -108,41 +130,41 @@ void OutlierRemovalRegistration::registration(QTextEdit* logger)
 	Decoupling decoupling(sampledCloudS, sampledCloudT, cors, resolution);
 	Eigen::Matrix4d transformation_matrix = decoupling.getTransformation();
 
-	logger->insertPlainText(tr("Point cloud registration completed!") + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
-	logger->insertPlainText(tr("Transformation Matrix:") + "\n");
+	logToLoggerORR(logger, tr("Point cloud registration completed!") + "\n");
+	logToLoggerORR(logger, tr("===================================") + "\n");
+	logToLoggerORR(logger, tr("Transformation Matrix:") + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix(0, 0), 'f', 6) + "\t" +
+	logToLoggerORR(logger, QString::number(transformation_matrix(0, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(0, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(0, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(0, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix(1, 0), 'f', 6) + "\t" +
+	logToLoggerORR(logger, QString::number(transformation_matrix(1, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(1, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(1, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(1, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix(2, 0), 'f', 6) + "\t" +
+	logToLoggerORR(logger, QString::number(transformation_matrix(2, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(2, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(2, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(2, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(QString::number(transformation_matrix(3, 0), 'f', 6) + "\t" +
+	logToLoggerORR(logger, QString::number(transformation_matrix(3, 0), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(3, 1), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(3, 2), 'f', 6) + "\t" +
 		QString::number(transformation_matrix(3, 3), 'f', 6) + "\n");
 
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLoggerORR(logger, tr("===================================") + "\n");
 
-	std::filesystem::path sourcePath(_inputFileOfSource->text().toStdString());
-	std::filesystem::path targetPath(_inputFileOfTarget->text().toStdString());
+	std::filesystem::path sourcePath(params.sourceFile.toStdString());
+	std::filesystem::path targetPath(params.targetFile.toStdString());
 
-	std::string outputDir = _outputFileOfDir->text().toStdString();
+	std::string outputDir = params.outputDir.toStdString();
 	std::ofstream dataOut(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt");
 
 	if (!dataOut)
 	{
-		logger->insertPlainText(tr("Failed to create transformation matrix file!") + "\n");
+		logToLoggerORR(logger, tr("Failed to create transformation matrix file!") + "\n");
 		return;
 	}
 
@@ -153,7 +175,7 @@ void OutlierRemovalRegistration::registration(QTextEdit* logger)
 	dataOut << transformation_matrix(3, 0) << "\t" << transformation_matrix(3, 1) << "\t" << transformation_matrix(3, 2) << "\t" << transformation_matrix(3, 3) << "\n";
 	dataOut.close();
 
-	logger->insertPlainText(tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt") + "\n");
+	logToLoggerORR(logger, tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt") + "\n");
 
 	pcl::io::loadPCDFile(sourceFile, *sampledCloudS);
 
@@ -164,6 +186,6 @@ void OutlierRemovalRegistration::registration(QTextEdit* logger)
 
 	pcl::io::savePCDFileBinary(outputSource, *sampledCloudT);
 	
-	logger->insertPlainText(tr("Registered point cloud saved to: ") + QString::fromStdString(outputSource) + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLoggerORR(logger, tr("Registered point cloud saved to: ") + QString::fromStdString(outputSource) + "\n");
+	logToLoggerORR(logger, tr("===================================") + "\n");
 }

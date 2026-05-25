@@ -1,5 +1,12 @@
 #include "../include/RegistrationForm_ULS.h"
 
+static void logToLoggerULS(QTextEdit* logger, const QString& text)
+{
+	QMetaObject::invokeMethod(logger, [logger, text]() {
+		logger->insertPlainText(text);
+	}, Qt::QueuedConnection);
+}
+
 RegistrationULS::RegistrationULS(QWidget* parent)
 	:QDialog(parent),
 	Ui::ULS_TLSRegistration()
@@ -21,7 +28,7 @@ RegistrationULS::~RegistrationULS()
 
 void RegistrationULS::reject()
 {
-	this->done(QDialog::Rejected); // »òÕßÖ±½Ó this->reject();
+	this->done(QDialog::Rejected); // ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ this->reject();
 }
 
 void RegistrationULS::selectInputFileOfSource()
@@ -52,9 +59,45 @@ void RegistrationULS::selectOutputDir()
 	_outputFileOfDir->setText(dir);
 }
 
+struct ULSRegParams {
+	QString sourceFile;
+	QString targetFile;
+	QString outputDir;
+	float resolution;
+	float gridStep;
+	float searchRadius;
+	float radiusStep;
+	int numSectors;
+	float angleThe;
+	float a2DThe;
+	float a3DThe;
+};
+
 void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
 {
-	// To be implemented
+	if (_resolution->text().isEmpty() ||
+		_gridStep->text().isEmpty() ||
+		_searchRadius->text().isEmpty() ||
+		_radiusStep->text().isEmpty() ||
+		_numSectors->text().isEmpty() ||
+		_angleThe->text().isEmpty() ||
+		_a2DThe->text().isEmpty() ||
+		_a3DThe->text().isEmpty())
+		return;
+
+	ULSRegParams params;
+	params.sourceFile = _inputFileOfSource->text();
+	params.targetFile = _inputFileOfTarget->text();
+	params.outputDir = _outputFileOfDir->text();
+	params.resolution = _resolution->text().toFloat();
+	params.gridStep = _gridStep->text().toFloat();
+	params.searchRadius = _searchRadius->text().toFloat();
+	params.radiusStep = _radiusStep->text().toFloat();
+	params.numSectors = _numSectors->text().toInt();
+	params.angleThe = _angleThe->text().toFloat();
+	params.a2DThe = _a2DThe->text().toFloat();
+	params.a3DThe = _a3DThe->text().toFloat();
+
 	if (progress)
 	{
 		progress->setLabelText(tr("Performing point cloud registration ..."));
@@ -63,7 +106,7 @@ void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* 
 		progress->show();
 		progress->raise();
 	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationULS::registration, this, logger));
+	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationULS::registration, this, params, logger));
 	while (!future.isFinished())
 	{
 		if (progress)
@@ -86,31 +129,21 @@ void RegistrationULS::initParam()
 	_a3DThe->setText("0.1");
 }
 
-void RegistrationULS::registration(QTextEdit* logger)
+void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
 {
-	if (_resolution->text().isEmpty() ||
-		_gridStep->text().isEmpty() ||
-		_searchRadius->text().isEmpty() ||
-		_radiusStep->text().isEmpty() ||
-		_numSectors->text().isEmpty() ||
-		_angleThe->text().isEmpty() ||
-		_a2DThe->text().isEmpty() ||
-		_a3DThe->text().isEmpty())
-		return;
-
-	float resolution = _resolution->text().toFloat();
-	float gridStep = _gridStep->text().toFloat();
-	float searchRadius = _searchRadius->text().toFloat();
-	float radiusStep = _radiusStep->text().toFloat();
-	size_t numSectors = _numSectors->text().toInt();
-	float angleThe = _angleThe->text().toFloat();
-	float a2DThe = _a2DThe->text().toFloat();
-	float a3DThe = _a3DThe->text().toFloat();
+	float resolution = params.resolution;
+	float gridStep = params.gridStep;
+	float searchRadius = params.searchRadius;
+	float radiusStep = params.radiusStep;
+	size_t numSectors = params.numSectors;
+	float angleThe = params.angleThe;
+	float a2DThe = params.a2DThe;
+	float a3DThe = params.a3DThe;
 
 	PointCloud3fPtr uav = std::make_shared<PointCloud3f>();
 	PointCloud3fPtr tls = std::make_shared<PointCloud3f>();
-	loadLasFile(_inputFileOfSource->text().toStdString(), uav);
-	loadLasFile(_inputFileOfTarget->text().toStdString(), tls);
+	loadLasFile(params.sourceFile.toStdString(), uav);
+	loadLasFile(params.targetFile.toStdString(), tls);
 
 	std::shared_ptr<RegistrationU2T> u2t = std::make_shared<RegistrationU2T>(uav, tls);
 	u2t->setGridFilterRes(resolution);
@@ -122,21 +155,21 @@ void RegistrationULS::registration(QTextEdit* logger)
 	u2t->registration();
 	std::array<std::array<float, 4>, 4> transMatrix = u2t->getTranslationMatrix();
 
-	logger->insertPlainText(tr("Point cloud registration completed!") + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
-	logger->insertPlainText(tr("Transformation Matrix:") + "\n");
-	logger->insertPlainText(QString::number(transMatrix[0][0], 'f', 6) + "\t" + QString::number(transMatrix[0][1], 'f', 6) + "\t" + QString::number(transMatrix[0][2], 'f', 6) + "\t" + QString::number(transMatrix[0][3], 'f', 6) + "\n");
-	logger->insertPlainText(QString::number(transMatrix[1][0], 'f', 6) + "\t" + QString::number(transMatrix[1][1], 'f', 6) + "\t" + QString::number(transMatrix[1][2], 'f', 6) + "\t" + QString::number(transMatrix[1][3], 'f', 6) + "\n");
-	logger->insertPlainText(QString::number(transMatrix[2][0], 'f', 6) + "\t" + QString::number(transMatrix[2][1], 'f', 6) + "\t" + QString::number(transMatrix[2][2], 'f', 6) + "\t" + QString::number(transMatrix[2][3], 'f', 6) + "\n");
-	logger->insertPlainText(QString::number(transMatrix[3][0], 'f', 6) + "\t" + QString::number(transMatrix[3][1], 'f', 6) + "\t" + QString::number(transMatrix[3][2], 'f', 6) + "\t" + QString::number(transMatrix[3][3], 'f', 6) + "\n");
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLoggerULS(logger, tr("Point cloud registration completed!") + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
+	logToLoggerULS(logger, tr("Transformation Matrix:") + "\n");
+	logToLoggerULS(logger, QString::number(transMatrix[0][0], 'f', 6) + "\t" + QString::number(transMatrix[0][1], 'f', 6) + "\t" + QString::number(transMatrix[0][2], 'f', 6) + "\t" + QString::number(transMatrix[0][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, QString::number(transMatrix[1][0], 'f', 6) + "\t" + QString::number(transMatrix[1][1], 'f', 6) + "\t" + QString::number(transMatrix[1][2], 'f', 6) + "\t" + QString::number(transMatrix[1][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, QString::number(transMatrix[2][0], 'f', 6) + "\t" + QString::number(transMatrix[2][1], 'f', 6) + "\t" + QString::number(transMatrix[2][2], 'f', 6) + "\t" + QString::number(transMatrix[2][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, QString::number(transMatrix[3][0], 'f', 6) + "\t" + QString::number(transMatrix[3][1], 'f', 6) + "\t" + QString::number(transMatrix[3][2], 'f', 6) + "\t" + QString::number(transMatrix[3][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
 
-	std::filesystem::path inputPath_uav(_inputFileOfSource->text().toStdString());
-	std::filesystem::path inputPath_tls(_inputFileOfTarget->text().toStdString());
+	std::filesystem::path inputPath_uav(params.sourceFile.toStdString());
+	std::filesystem::path inputPath_tls(params.targetFile.toStdString());
 
 
 
-	std::string outputDir = _outputFileOfDir->text().toStdString();
+	std::string outputDir = params.outputDir.toStdString();
 	std::ofstream dataOut(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt");
 	dataOut << std::fixed << std::setprecision(6);
 	dataOut << transMatrix[0][0] << " " << transMatrix[0][1] << " " << transMatrix[0][2] << " " << transMatrix[0][3] << std::endl;
@@ -145,7 +178,7 @@ void RegistrationULS::registration(QTextEdit* logger)
 	dataOut << transMatrix[3][0] << " " << transMatrix[3][1] << " " << transMatrix[3][2] << " " << transMatrix[3][3] << std::endl;
 	dataOut.close();
 
-	logger->insertPlainText(tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt") + "\n");
+	logToLoggerULS(logger, tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt") + "\n");
 
 	std::array<std::array<float, 3>, 3> rotMatrix;
 	rotMatrix[0][0] = transMatrix[0][0]; rotMatrix[0][1] = transMatrix[0][1]; rotMatrix[0][2] = transMatrix[0][2];
@@ -158,9 +191,9 @@ void RegistrationULS::registration(QTextEdit* logger)
 
 	outputLasFile(outputDir + "/" + inputPath_tls.stem().string() + "_registered.las", tls);
 
-	logger->insertPlainText(tr("Registered point cloud saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_tls.stem().string() + "_registered.las") + "\n");
+	logToLoggerULS(logger, tr("Registered point cloud saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_tls.stem().string() + "_registered.las") + "\n");
 
-	logger->insertPlainText(tr("===================================") + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
 }
 
 void RegistrationULS::apply()

@@ -17,22 +17,37 @@ public:
 	explicit RegistrationForm_TLS(QWidget* parent = nullptr);
 	~RegistrationForm_TLS();
 
-	//Ö´ÐÐ×¢²á
+	//Ö´ï¿½ï¿½×¢ï¿½ï¿½
 	void executeRegistration(QProgressDialog* progress, QTextEdit* logger);
 
 private slots:
 	void apply();
 	void reject();
-	//Ñ¡ÔñÊäÈëµÄÔ´µãÔÆ
+	//Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½
 	void selectInputFileOfSource();
-	//Ñ¡ÔñÊäÈëµÄÄ¿±êµãÔÆ
+	//Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½
 	void selectInputFileOfTarget();
-	// Ñ¡ÔñÊä³öÂ·¾¶
+	// Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½
 	void selectOutputDir();
 
 private:
 	void initParam();
 
-	void registration(QTextEdit* logger);
+	struct TLSRegParams {
+		QString sourceFile;
+		QString targetFile;
+		QString outputDir;
+		int sector_num;
+		int pointsConstrain;
+		float resolution_Radius;
+		float maxRadius;
+		float minRadius;
+		float error_dis;
+		float error_z;
+		float error_ang;
+		float zConstrain;
+	};
+
+	void registration(TLSRegParams params, QTextEdit* logger);
 
 };

@@ -22,11 +22,14 @@ FormSettings::FormSettings(QVBoxLayout* layout, QWidget* parent)
 
 FormSettings::~FormSettings()
 {
-    std::filesystem::remove_all(QCoreApplication::applicationDirPath().toStdString() + "./tmp");
+    std::filesystem::remove_all(std::filesystem::path(QCoreApplication::applicationDirPath().toStdString()) / "tmp");
 }
 
 const osg::Vec4& FormSettings::getBackGroundColor()
 {
+    static const osg::Vec4 defaultColor(0.9412f, 0.9412f, 0.9412f, 1.0f);
+    if (_viewer == nullptr)
+        return defaultColor;
     return _viewer->getCamera()->getClearColor();
 }
 
@@ -282,11 +285,27 @@ void FormSettings::loadFiles(std::vector<std::string> inputFiles, std::string ou
 //}
 
 
-void FormSettings::deletePointCloudNode(osg::ref_ptr<osg::MSpaceNode> Node,string outputDir)
+void FormSettings::deletePointCloudNode(osg::ref_ptr<osg::MSpaceNode> Node, string outputDir)
 {
     _root->removeChild(Node);
-    //删除节点对应的文件
-    std::filesystem::remove_all(outputDir);
+
+    // Clear osgDB object cache to release cached .bin file references
+    osgDB::Registry::instance()->clearObjectCache();
+
+    // Small delay to let OSG's background pager thread finish
+    OpenThreads::Thread::microSleep(100000);
+
+    // Delete files from disk with retry for Windows file lock timing
+    int retries = 3;
+    while (retries > 0)
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(outputDir, ec);
+        if (!ec)
+            break;
+        OpenThreads::Thread::microSleep(200000);
+        --retries;
+    }
 }
 
 //void FormSettings::deeteTreeNode(osg::ref_ptr<osg::Group> Node)
