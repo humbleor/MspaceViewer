@@ -121,6 +121,9 @@ cd MspaceViewer
 
 ```bash
 vcpkg install pcl osg gdal qt5-base --triplet=x64-windows
+# gtsam 的Debug版内存爆炸，不推荐使用
+vcpkg install gtsam:x64-windows-release
+vcpkg install opencv liblas:x64-windows-release
 ```
 
 ### 3. 配置并构建主项目

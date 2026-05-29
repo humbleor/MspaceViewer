@@ -3,6 +3,7 @@
 #include "../include/utils/HashRegObj.h"
 #endif
 #include <omp.h>
+#include <limits>
 
 // sort the node by vote number
 bool sortByVoteNumber(const std::pair<int, int> a, const std::pair<int, int> b)
@@ -11,8 +12,8 @@ bool sortByVoteNumber(const std::pair<int, int> a, const std::pair<int, int> b)
 };
 
 // time difference between two time step
-double time_inc(std::chrono::_V2::system_clock::time_point &t_end,
-                std::chrono::_V2::system_clock::time_point &t_begin) 
+double time_inc(std::chrono::steady_clock::time_point &t_end,
+                std::chrono::steady_clock::time_point &t_begin)
 {
   return std::chrono::duration_cast<std::chrono::duration<double>>(t_end - t_begin).count() * 1000;
 }
@@ -1002,7 +1003,7 @@ void HashRegDescManager::find_cluster_root(pcl::PointCloud<pcl::PointXYZ>::Ptr i
 {
     int grid_num = config_setting_.grid_num;
     double range = config_setting_.range;
-    std::vector<std::vector<double>> hori_grid(grid_num*2, std::vector<double>(grid_num*2, MAXFLOAT));
+    std::vector<std::vector<double>> hori_grid(grid_num*2, std::vector<double>(grid_num*2, std::numeric_limits<double>::max()));
 
     double grid_size = range/grid_num;
     int NUM = input_cloud->size();
@@ -1460,7 +1461,7 @@ void HashRegDescManager::candidate_frames_verify( const FrameInfo &curr_frame,
     std::mutex mylock;
     // loop the selected triangles in match list, num is use_size
     #pragma omp parallel for num_threads(8)
-    for (size_t i = 0; i < use_size; i++) 
+    for (int i = 0; i < (int)use_size; i++) 
     {
         // single triangle pair
         auto single_pair = candidate_matcher.match_list_[i * skip_len];

@@ -10,6 +10,7 @@
 #include "RegistrationForm_ULS.h"
 #include "OutlierRemovalRegistration.h"
 #include "RegistrationForm_TLS.h"
+#include "ForestRegistration.h"
 //#include "TreeEvaluation.h"
 //#include "StemCurveEvaluation.h"
 //#include "../../TreeEvaluation/include/3DMatching.h"
@@ -44,6 +45,8 @@ private:
 	void outlierRemovalRegistration();
     //TLS点云配准
 	void registration_TLS();
+    //森林点云配准
+    void registration_Forest();
     //转化到中文
     void changeLanguage_Chinese();
     //转化到英文

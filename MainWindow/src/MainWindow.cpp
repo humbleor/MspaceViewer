@@ -18,6 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
 	connect(ui.action_registration_ULS, &QAction::triggered, this, &MainWindow::registration_TLS_ULS);
 	connect(ui.action_registration_TLS, &QAction::triggered, this, &MainWindow::registration_TLS);
 	connect(ui.action_registration_Fast, &QAction::triggered, this, &MainWindow::outlierRemovalRegistration);
+	connect(ui.action_registration_Forest, &QAction::triggered, this, &MainWindow::registration_Forest);
     //connect(ui._action_treeEvaluation, &QAction::triggered, this, &MainWindow::treeEvaluation);
     //connect(ui._action_stemCurveEvaluation, &QAction::triggered, this, &MainWindow::stemCurveEvaluation);
     connect(ui._action_Chinese, &QAction::triggered, this, &MainWindow::changeLanguage_Chinese);
@@ -246,6 +247,21 @@ void MainWindow::registration_TLS()
     pBar->setAlignment(Qt::AlignCenter);
     pDlg->setBar(pBar);
     _registrationTLS->executeRegistration(pDlg.get(), ui._Logger);
+}
+
+void MainWindow::registration_Forest()
+{
+	std::shared_ptr<ForestRegistration> _forestRegistration = std::make_shared<ForestRegistration>(this);
+    if (!_forestRegistration->exec())
+		return;
+	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
+	pDlg->setWindowTitle(tr("Tips"));
+	pDlg->setModal(true);
+	QProgressBar* pBar = new QProgressBar(pDlg.get());
+	pBar->setRange(0, 0);
+	pBar->setAlignment(Qt::AlignCenter);
+	pDlg->setBar(pBar);
+	_forestRegistration->executeRegistration(pDlg.get(), ui._Logger);
 }
 
 void MainWindow::changeLanguage_Chinese()

@@ -62,6 +62,7 @@
      <addaction name="action_registration_TLS"/>
      <addaction name="action_registration_ULS"/>
      <addaction name="action_registration_Fast"/>
+     <addaction name="action_registration_Forest"/>
     </widget>
     <addaction name="menu_registration"/>
    </widget>
@@ -218,6 +219,11 @@
   <action name="action_registration_ULS">
    <property name="text">
     <string>空地点云配准</string>
+   </property>
+  </action>
+  <action name="action_registration_Forest">
+   <property name="text">
+    <string>森林点云配准</string>
    </property>
   </action>
   <action name="action_registration_Fast">

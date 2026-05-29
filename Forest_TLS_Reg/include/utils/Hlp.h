@@ -1,3 +1,5 @@
+#pragma once
+
 #include "stdio.h"
 #include <iostream>
 #include<fstream>
@@ -28,6 +30,9 @@
 #define INFINITESIMAL 0.00000001
 
 
+// MAX/MIN macros (defined after liblas includes to avoid conflicts)
+#undef MAX
+#undef MIN
 #define MAX(A,B) ((A) >= (B) ? (A) : (B))
 #define MIN(A,B) ((A) <= (B) ? (A) : (B))
 

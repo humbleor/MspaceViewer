@@ -6,6 +6,24 @@ set(UI_FILES
     resource/TLSRegistration.ui
     resource/TLS-ULSRegistration.ui
     resource/OutlierRemovalRegistration.ui
+    resource/ForestRegistration.ui
+)
+
+# ── Forest_TLS_Reg 核心源文件（直接编译进 MainWindow）──
+set(FOREST_REG_SOURCES
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Hlp.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/HashRegObj.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/GenAlg.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Point2img.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/FEC.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/CSF.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Cloth.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Constraint.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Particle.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Rasterization.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/XYZReader.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/point_cloud.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/c2cdist.cpp
 )
 
 # ── 主程序源文件（不含 osgQt 重复文件，osgQt 作为独立库链接）──
@@ -16,6 +34,8 @@ set(MAIN_SOURCES
     src/RegistrationForm_ULS.cpp
     src/RegistrationForm_TLS.cpp
     src/OutlierRemovalRegistration.cpp
+    src/ForestRegistration.cpp
+    ${FOREST_REG_SOURCES}
     # src/TrreeEvaluation.cpp  # Incomplete - depends on missing TreeEvaluation module
     # src/StemCurveEvaluation.cpp
 )
@@ -26,6 +46,7 @@ set(MAIN_HEADERS
     include/RegistrationForm_ULS.h
     include/RegistrationForm_TLS.h
     include/OutlierRemovalRegistration.h
+    include/ForestRegistration.h
     # include/StemCurveEvaluation.h
     # include/TreeEvaluation.h
 )
@@ -41,6 +62,11 @@ target_include_directories(MspaceViewer
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
     # 相对路径 ../../osgQt/include/ 和 ../../MSpaceOctree/include/ 从此目录解析
     PRIVATE ${CMAKE_SOURCE_DIR}
+    # Forest_TLS_Reg headers
+    PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include
+    PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src
+    PRIVATE ${libLAS_INCLUDE_DIR}
+    PRIVATE D:/vcpkg/installed/x64-windows-release/include
 )
 
 target_link_libraries(MspaceViewer
@@ -65,8 +91,26 @@ target_link_libraries(MspaceViewer
         D4PCR
         TLSRegistration
         # PCL（OutlierRemovalRegistration 直接使用 PCL）
-        PCL::common PCL::io PCL::filters PCL::features PCL::registration PCL::search
+        PCL::common PCL::io PCL::filters PCL::features PCL::registration PCL::search PCL::kdtree
         Eigen3::Eigen
+        # Forest_TLS_Reg dependencies
+        ${OpenCV_LIBRARIES}
+        ${libLAS_LIBRARY}
+        ${libLAS_C_LIBRARY}
+        Boost::regex Boost::serialization
+)
+
+# Link small_gicp (import library for the DLL)
+target_link_libraries(MspaceViewer PRIVATE
+    D:/vcpkg/installed/x64-windows-release/lib/small_gicp.lib
+)
+
+# Copy small_gicp.dll to output directory
+add_custom_command(TARGET MspaceViewer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "D:/vcpkg/installed/x64-windows-release/bin/small_gicp.dll"
+        "$<TARGET_FILE_DIR:MspaceViewer>"
+    COMMENT "Copying small_gicp.dll..."
 )
 
 set_target_properties(MspaceViewer PROPERTIES

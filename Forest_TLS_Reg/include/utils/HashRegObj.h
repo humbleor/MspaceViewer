@@ -37,8 +37,8 @@
 // sort the node by vote number
 bool sortByVoteNumber(const std::pair<int, int> a, const std::pair<int, int> b);
 // time increment
-double time_inc(std::chrono::_V2::system_clock::time_point &t_end,
-                std::chrono::_V2::system_clock::time_point &t_begin);
+double time_inc(std::chrono::steady_clock::time_point &t_end,
+                std::chrono::steady_clock::time_point &t_begin);
 
 pcl::PointXYZI vec2point(const Eigen::Vector3d &vec);
 Eigen::Vector3d point2vec(const pcl::PointXYZI &pi);

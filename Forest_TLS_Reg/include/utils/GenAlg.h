@@ -1,4 +1,7 @@
+#pragma once
+
 #include <Eigen/Dense>
+#include "../dst/DST.h"
 #include<opencv2/core/eigen.hpp>
 #include<opencv2/opencv.hpp>
 #include<opencv2/highgui/highgui.hpp>

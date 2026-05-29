@@ -134,18 +134,28 @@ _pcl(features)
 _pcl(registration)
 _pcl(search)
 _pcl(segmentation)
+_pcl(kdtree)
 _pcl(visualization)
 
 # ── Eigen3 ──
 find_package(Eigen3 REQUIRED)
 
+# ── OpenCV (required by Forest_TLS_Reg) ──
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+
+# ── libLAS (required by Forest_TLS_Reg, from vcpkg) ──
+find_path(libLAS_INCLUDE_DIR NAMES liblas/liblas.hpp PATHS "${DEP_ROOT}/include" NO_DEFAULT_PATH)
+find_library(libLAS_LIBRARY NAMES liblas PATHS "${DEP_ROOT}/lib" NO_DEFAULT_PATH)
+find_library(libLAS_C_LIBRARY NAMES liblas_c PATHS "${DEP_ROOT}/lib" NO_DEFAULT_PATH)
+
 # ── Boost ──
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED COMPONENTS regex serialization)
 
 # ── 子模块 ──
 add_subdirectory(D4PCR)
 add_subdirectory(ULS-TLS)
 add_subdirectory(TLSRegistration)
+add_subdirectory(Forest_TLS_Reg)
 add_subdirectory(MspaceOctree)
 add_subdirectory(osgQt)
 add_subdirectory(osgdb_bin)
