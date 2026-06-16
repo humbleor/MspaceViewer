@@ -7,8 +7,8 @@
 #include <QScreen>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
-#include <QtGui/QOpenGLShaderProgram>
-#include <QtGui/QOpenGLVertexArrayObject>
+#include <QtOpenGL/QOpenGLShaderProgram>
+#include <QtOpenGL/QOpenGLVertexArrayObject>
 
 #include <QKeyEvent>
 #include <QMouseEvent>

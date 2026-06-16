@@ -1,6 +1,7 @@
 #include "../include/MSpaceOCTree.h"
 #include <osgDB/WriteFile>
 #include "../include/potree_to_osg.h"
+#include <algorithm>
 
 MSpaceOCTree::MSpaceOCTree(vector<string> inputPaths, string outputPath)
 {
@@ -12,20 +13,129 @@ MSpaceOCTree::~MSpaceOCTree()
 {
 }
 
+bool MSpaceOCTree::isLasFile(const std::string& path)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".las" || ext == ".laz";
+}
+
+bool MSpaceOCTree::isPcdFile(const std::string& path)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".pcd";
+}
+
+bool MSpaceOCTree::isPlyFile(const std::string& path)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".ply";
+}
+
+std::string MSpaceOCTree::convertToLas(const std::string& filePath, const std::string& outputDir)
+{
+    std::string stem = std::filesystem::path(filePath).stem().string();
+    std::string lasPath = outputDir + "/" + stem + ".las";
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+    if (isPcdFile(filePath))
+    {
+        if (pcl::io::loadPCDFile<pcl::PointXYZ>(filePath, *cloud) == -1)
+        {
+            std::cerr << "Error: Could not load PCD file " << filePath << std::endl;
+            return "";
+        }
+    }
+    else if (isPlyFile(filePath))
+    {
+        pcl::PointCloud<pcl::PointXYZ> tmp;
+        if (pcl::io::loadPLYFile(filePath, tmp) < 0)
+        {
+            std::cerr << "Error: Could not load PLY file " << filePath << std::endl;
+            return "";
+        }
+        *cloud = tmp;
+    }
+    else
+    {
+        return "";
+    }
+
+    if (cloud->empty())
+    {
+        std::cerr << "Error: Point cloud is empty " << filePath << std::endl;
+        return "";
+    }
+
+    std::ofstream ofs;
+    if (!liblas::Create(ofs, lasPath))
+    {
+        std::cerr << "Error: Could not create LAS file " << lasPath << std::endl;
+        return "";
+    }
+
+    double min_x = cloud->points[0].x, max_x = cloud->points[0].x;
+    double min_y = cloud->points[0].y, max_y = cloud->points[0].y;
+    double min_z = cloud->points[0].z, max_z = cloud->points[0].z;
+
+    for (const auto& p : cloud->points)
+    {
+        min_x = std::min(min_x, (double)p.x);
+        max_x = std::max(max_x, (double)p.x);
+        min_y = std::min(min_y, (double)p.y);
+        max_y = std::max(max_y, (double)p.y);
+        min_z = std::min(min_z, (double)p.z);
+        max_z = std::max(max_z, (double)p.z);
+    }
+
+    int xoffset = int(min_x);
+    int yoffset = int(min_y);
+    int zoffset = int(min_z);
+
+    liblas::Header header;
+    header.SetVersionMajor(1);
+    header.SetVersionMinor(2);
+    header.SetOffset(xoffset, yoffset, zoffset);
+    header.SetDataFormatId(liblas::ePointFormat3);
+    header.SetPointRecordsCount(cloud->size());
+    header.SetScale(0.0001, 0.0001, 0.0001);
+    header.SetMin(min_x, min_y, min_z);
+    header.SetMax(max_x, max_y, max_z);
+
+    liblas::Writer writer(ofs, header);
+
+    for (const auto& p : cloud->points)
+    {
+        liblas::Point point(&header);
+        point.SetX(p.x);
+        point.SetY(p.y);
+        point.SetZ(p.z);
+        writer.WritePoint(point);
+    }
+
+    writer.WriteHeader();
+    ofs.close();
+
+    return lasPath;
+}
+
 bool MSpaceOCTree::filesConverter(osg::ref_ptr<osg::MSpaceNode> lodStructure)
 {
-    //·µ»ØÔ´ÎÄ¼þÂ·¾¶ºÍËùÓÐÎÄ¼þµÄ»ù±¾ÐÅÏ¢
+    //ï¿½ï¿½ï¿½ï¿½Ô´ï¿½Ä¼ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
     auto [name, sources] = curateSources(_options.source);
     if (_options.name.size() == 0) {
         _options.name = name;
     }
 
-    //¸ù¾ÝÊäÈë_optionsÖÐµÄÐÅÏ¢£¬È·¶¨Êä³öÎÄ¼þÖÐËù°üº¬µÄÊôÐÔ
+    //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½_optionsï¿½Ðµï¿½ï¿½ï¿½Ï¢ï¿½ï¿½È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     auto outputAttributes = computeOutputAttributes(sources, _options.attributes);
 
-    //»ñÈ¡µãÔÆÊý¾ÝµÄ×î´óÖµ£¬×îÐ¡Öµ£¬µãÔÆ¸öÊýºÍÕ¼ÓÃ¿Õ¼ä
+    //ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ýµï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½Ð¡Öµï¿½ï¿½ï¿½ï¿½ï¿½Æ¸ï¿½ï¿½ï¿½ï¿½ï¿½Õ¼ï¿½Ã¿Õ¼ï¿½
     auto stats = computeStats(sources);
-    //Êä³öÎÄ¼þÂ·¾¶
+    //ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½Â·ï¿½ï¿½
     string targetDir = _options.outdir;
     targetDir = targetDir;
     fs::create_directories(targetDir);
@@ -47,26 +157,45 @@ bool MSpaceOCTree::filesConverter(osg::ref_ptr<osg::MSpaceNode> lodStructure)
 }
 
 
-//·µ»ØÂ·¾¶Ãû³ÆºÍËùÓÐÎÄ¼þµÄ»ù±¾ÐÅÏ¢
+//ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½Æºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 Curated MSpaceOCTree::curateSources(vector<string> paths)
 {
 
     string name = "";
+    std::string tmpDir = _options.outdir + "/tmp_convert";
+    fs::create_directories(tmpDir);
 
     vector<string> expanded;
     for (auto path : paths) {
         if (fs::is_directory(path)) {
             for (auto& entry : fs::directory_iterator(path)) {
                 string str = entry.path().string();
+                std::string ext = fs::path(str).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-                if (iEndsWith(str, "las") || iEndsWith(str, "laz")) {
+                if (ext == ".las" || ext == ".laz") {
                     expanded.push_back(str);
+                }
+                else if (ext == ".pcd" || ext == ".ply") {
+                    std::string lasPath = convertToLas(str, tmpDir);
+                    if (!lasPath.empty()) {
+                        expanded.push_back(lasPath);
+                    }
                 }
             }
         }
         else if (fs::is_regular_file(path)) {
-            if (iEndsWith(path, "las") || iEndsWith(path, "laz")) {
+            std::string ext = fs::path(path).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+            if (ext == ".las" || ext == ".laz") {
                 expanded.push_back(path);
+            }
+            else if (ext == ".pcd" || ext == ".ply") {
+                std::string lasPath = convertToLas(path, tmpDir);
+                if (!lasPath.empty()) {
+                    expanded.push_back(lasPath);
+                }
             }
         }
 

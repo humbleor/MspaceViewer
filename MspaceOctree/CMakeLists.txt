@@ -1,5 +1,8 @@
 project(MspaceOctree LANGUAGES CXX)
 
+# ── PCL ──
+find_package(PCL 1.14 REQUIRED COMPONENTS common io)
+
 # ── 先构建 LASzip ──
 add_subdirectory(libs/laszip)
 
@@ -25,11 +28,14 @@ target_include_directories(MspaceOctree
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libs/json
     # laszip 头文件
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libs/laszip
+    PUBLIC ${PCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(MspaceOctree
     PUBLIC laszip
-    PUBLIC OpenSceneGraph::osg OpenSceneGraph::osgDB OpenSceneGraph::osgUtil OpenSceneGraph::osgViewer
+    PUBLIC unofficial::osg::osg unofficial::osg::osgDB unofficial::osg::osgUtil unofficial::osg::osgViewer
+    PUBLIC ${PCL_LIBRARIES}
+    PUBLIC ${libLAS_LIBRARY}
 )
 
 set_target_properties(MspaceOctree PROPERTIES

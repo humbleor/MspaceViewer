@@ -1,10 +1,17 @@
 #include "../include/RelationshipConstruction.h"
 #include <pcl/kdtree/kdtree_flann.h>
+#include <filesystem>
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <liblas/liblas.hpp>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 
 RelationshipConstruction::RelationshipConstruction(std::string pathS, std::string pathT, float resolution, bool getcenter)
 {
-	loadPCDFileS(pathS);
-	loadPCDFileT(pathT);
+	loadPointCloudFile(pathS, _inputCloudS);
+	loadPointCloudFile(pathT, _inputCloudT);
 
 	if (getcenter)
 	{
@@ -110,21 +117,55 @@ pcl::Correspondences RelationshipConstruction::getCorrespondences()
 	return _cors;
 }
 
-void RelationshipConstruction::loadPCDFileS(std::string pathS)
+void RelationshipConstruction::loadPointCloudFile(std::string path, PointCloudPtr& cloud)
 {
-	_inputCloudS = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(pathS, *_inputCloudS) == -1)
-	{
-		PCL_ERROR("Couldn't read file source.pcd \n");
-	}
-}
+	cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+	std::string ext = std::filesystem::path(path).extension().string();
+	std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-void RelationshipConstruction::loadPCDFileT(std::string pathT)
-{
-	_inputCloudT = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(pathT, *_inputCloudT) == -1)
+	if (ext == ".pcd")
 	{
-		PCL_ERROR("Couldn't read file target.pcd \n");
+		if (pcl::io::loadPCDFile<pcl::PointXYZ>(path, *cloud) == -1)
+		{
+			PCL_ERROR("Couldn't read file: %s\n", path.c_str());
+		}
+	}
+	else if (ext == ".ply")
+	{
+		pcl::PointCloud<pcl::PointXYZ> tmp;
+		if (pcl::io::loadPLYFile(path, tmp) < 0)
+		{
+			PCL_ERROR("Couldn't read PLY file: %s\n", path.c_str());
+		}
+		*cloud = tmp;
+	}
+	else if (ext == ".las" || ext == ".laz")
+	{
+		std::ifstream ifs(path.c_str(), std::ios::in | std::ios::binary);
+		if (!ifs.is_open())
+		{
+			PCL_ERROR("Couldn't open LAS file: %s\n", path.c_str());
+			return;
+		}
+		liblas::ReaderFactory f;
+		liblas::Reader reader = f.CreateWithStream(ifs);
+		unsigned long int nbPoints = reader.GetHeader().GetPointRecordsCount();
+		cloud->points.reserve(nbPoints);
+		while (reader.ReadNextPoint())
+		{
+			pcl::PointXYZ p;
+			p.x = reader.GetPoint().GetX();
+			p.y = reader.GetPoint().GetY();
+			p.z = reader.GetPoint().GetZ();
+			cloud->points.push_back(p);
+		}
+		cloud->width = nbPoints;
+		cloud->height = 1;
+		cloud->is_dense = false;
+	}
+	else
+	{
+		PCL_ERROR("Unsupported file format: %s\n", ext.c_str());
 	}
 }
 

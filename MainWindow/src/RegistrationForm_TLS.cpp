@@ -1,4 +1,5 @@
 #include "../include/RegistrationForm_TLS.h"
+#include "../include/PointCloudLoader.h"
 
 static void logToLogger(QTextEdit* logger, const QString& text)
 {
@@ -28,7 +29,11 @@ RegistrationForm_TLS::~RegistrationForm_TLS()
 void RegistrationForm_TLS::selectInputFileOfSource()
 {
 	QStringList fileTypes;
-	fileTypes << "PCD Files (*.pcd)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Source File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;
@@ -38,7 +43,11 @@ void RegistrationForm_TLS::selectInputFileOfSource()
 void RegistrationForm_TLS::selectInputFileOfTarget()
 {
 	QStringList fileTypes;
-	fileTypes << "PCD Files (*.pcd)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Target File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;
@@ -124,16 +133,19 @@ void RegistrationForm_TLS::initParam()
 	_zConstrain->setText("0.2");
 }
 
+#include "../include/PointCloudLoader.h"
+
 void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(params.sourceFile.toStdString(), *source_cloud) == -1)
+
+	if (!pcutil::loadPointCloud(params.sourceFile.toStdString(), source_cloud))
 	{
 		logToLogger(logger, tr("Failed to load source point cloud file!") + "\n");
 		return;
 	}
-	if (pcl::io::loadPCDFile<pcl::PointXYZ>(params.targetFile.toStdString(), *target_cloud) == -1)
+	if (!pcutil::loadPointCloud(params.targetFile.toStdString(), target_cloud))
 	{
 		logToLogger(logger, tr("Failed to load target point cloud file!") + "\n");
 		return;
@@ -154,10 +166,10 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 	//------------------------------------------������------------------------------------------
 	int num_combinations = num_sectors * num_sectors;
-	vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> target_rhombus_pointclouds;
-	target_rhombus_pointclouds = compute_rhombus_pointclouds(target_cloud, R_neighbor, num_sectors);
-	vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> source_rhombus_pointclouds;
-	source_rhombus_pointclouds = compute_rhombus_pointclouds(source_cloud, R_neighbor, num_sectors);
+	vector<vector<int>> target_rhombus_indices;
+	target_rhombus_indices = compute_rhombus_pointclouds(target_cloud, R_neighbor, num_sectors);
+	vector<vector<int>> source_rhombus_indices;
+	source_rhombus_indices = compute_rhombus_pointclouds(source_cloud, R_neighbor, num_sectors);
 	int fault_tolerant_iterations = 2;//���� ���������Ӧ��ϵ��Ӧʱʹ��
 	std::vector <vector<vector<pcl::PointXYZ>>> target_rhombus_descriptors(num_sectors);
 	std::vector <vector<vector<pcl::PointXYZ>>> source_rhombus_descriptors(num_sectors);
@@ -166,8 +178,8 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 	for (int i = 0; i < num_sectors; i++)
 	{
-		target_rhombus_descriptors[i] = get_rhombus_descriptors(target_rhombus_pointclouds[i], i * dTheta, R_neighbor, Step);
-		source_rhombus_descriptors[i] = get_rhombus_descriptors(source_rhombus_pointclouds[i], i * dTheta, R_neighbor, Step);
+		target_rhombus_descriptors[i] = get_rhombus_descriptors(target_cloud, target_rhombus_indices[i], i * dTheta, R_neighbor, Step);
+		source_rhombus_descriptors[i] = get_rhombus_descriptors(source_cloud, source_rhombus_indices[i], i * dTheta, R_neighbor, Step);
 
 	}
 
@@ -179,6 +191,12 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	vector<float> Diff_Zt_Zs(num_combinations, 0.0);//Zt_Zs
 	vector<float> Diff_Lts(num_combinations, 0.0);//xoyƽ���ϵ�ƽ�Ƴ���
 
+	// Pre-allocate neighbor buffers once to avoid repeated allocations in inner loops
+	int max_grid_line_num = static_cast<int>((R_neighbor) * sin(60.0 * M_PI / 180.0) / Step) + 1;
+	int max_neighbor_size = max_grid_line_num * max_grid_line_num * fault_tolerant_iterations;
+	vector<float> neighbor_DZ(max_neighbor_size, 100.0f);
+	vector<float> neighbor_Dist(max_neighbor_size, 100.0f);
+	vector<float> neighbor_DiffD(max_neighbor_size, 100.0f);
 	for (size_t ii = 0; ii < num_dR; ii++)
 	{
 		int count = 0;
@@ -186,9 +204,12 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 		vector<float> diff_Z;
 
 		//diff_Z.reserve(grid_line_num * grid_line_num);
-		vector<float> neighbor_DZ(grid_line_num * grid_line_num * fault_tolerant_iterations, 100.0);
-		vector<float> neighbor_Dist(grid_line_num * grid_line_num * fault_tolerant_iterations, 100.0);
-		vector<float> neighbor_DiffD(grid_line_num * grid_line_num * fault_tolerant_iterations, 100.0);
+			int cur_neighbor_size = grid_line_num * grid_line_num * fault_tolerant_iterations;
+			if (cur_neighbor_size > max_neighbor_size) {
+				neighbor_DZ.resize(cur_neighbor_size, 100.0f);
+				neighbor_Dist.resize(cur_neighbor_size, 100.0f);
+				neighbor_DiffD.resize(cur_neighbor_size, 100.0f);
+			}
 		for (size_t i = 0; i < num_sectors; i++)
 		{
 			for (size_t j = 0; j < num_sectors; j++)
@@ -280,12 +301,26 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	int minIndex = std::distance(std::begin(std_dR), lest);                             //��ȡ��Сֵ����
 	logToLogger(logger, tr("minIndex:") + QString::number(minIndex) + "\n");
 
+	// Descriptor data no longer needed, release memory
+	target_rhombus_descriptors.clear();
+	target_rhombus_descriptors.shrink_to_fit();
+	source_rhombus_descriptors.clear();
+	source_rhombus_descriptors.shrink_to_fit();
+
 	pcl::PointCloud<pcl::PointXYZ>::Ptr source(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr target(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr sourceOverlapAll(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr targetOverlapAll(new pcl::PointCloud<pcl::PointXYZ>);
-	sourceOverlapAll = get_OverlapRhombus_pointclouds(source_rhombus_pointclouds[static_cast<int>(corr_dR[minIndex][1] / dTheta)], corr_dR[minIndex][2], corr_dR[minIndex][1]);
-	targetOverlapAll = get_OverlapRhombus_pointclouds(target_rhombus_pointclouds[static_cast<int>(corr_dR[minIndex][0] / dTheta)], corr_dR[minIndex][2], corr_dR[minIndex][0]);
+	int src_rhombus_idx = static_cast<int>(corr_dR[minIndex][1] / dTheta);
+	int tgt_rhombus_idx = static_cast<int>(corr_dR[minIndex][0] / dTheta);
+	sourceOverlapAll = get_OverlapRhombus_pointclouds(source_cloud, source_rhombus_indices[src_rhombus_idx], corr_dR[minIndex][2], corr_dR[minIndex][1]);
+	targetOverlapAll = get_OverlapRhombus_pointclouds(target_cloud, target_rhombus_indices[tgt_rhombus_idx], corr_dR[minIndex][2], corr_dR[minIndex][0]);
+
+	// 菱形索引数据已不再需要，释放内存
+	source_rhombus_indices.clear();
+	source_rhombus_indices.shrink_to_fit();
+	target_rhombus_indices.clear();
+	target_rhombus_indices.shrink_to_fit();
 
 	//std::cout << "T-Idx:" << corr_dR[minIndex][0] << " S-Idx:" << corr_dR[minIndex][1] << endl;
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
@@ -351,22 +386,25 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 
 	Eigen::Matrix4f Transform = Eigen::Matrix4f::Identity();
-	pcl::PointXYZ T1, T2, S1, S2;
-	std::vector<Eigen::Matrix4f> Transform_ransac(total* (total - 1) / 2);
-	std::vector<float> score_ransac(total* (total - 1) / 2, 100.0);
+	const int MAX_RANSAC_ITERATIONS = 10000;
+	int n_total_pairs = total * (total - 1) / 2;
+	int n_ransac = (n_total_pairs > MAX_RANSAC_ITERATIONS) ? MAX_RANSAC_ITERATIONS : n_total_pairs;
+	std::vector<Eigen::Matrix4f> Transform_ransac(n_ransac);
+	std::vector<float> score_ransac(n_ransac, 100.0);
 	int iteration_ransac = 0;
 	for (size_t i = 0; i < correspondences->size(); i++)
 	{
-		T1 = target->points[correspondences->at(i).index_match];
-		S1 = source->points[correspondences->at(i).index_query];
+		pcl::PointXYZ T1 = target->points[correspondences->at(i).index_match];
+		pcl::PointXYZ S1 = source->points[correspondences->at(i).index_query];
 		Eigen::Vector3f normal_s1(source_normals->points[correspondences->at(i).index_query].normal_x, source_normals->points[correspondences->at(i).index_query].normal_y, source_normals->points[correspondences->at(i).index_query].normal_z);
 		Eigen::Vector3f normal_t1(target_normals->points[correspondences->at(i).index_match].normal_x, target_normals->points[correspondences->at(i).index_match].normal_y, target_normals->points[correspondences->at(i).index_match].normal_z);
 		for (size_t j = i + 1; j < correspondences->size(); j++)
 		{
+			if (iteration_ransac >= n_ransac) break;
 			Eigen::Vector3f normal_s2(source_normals->points[correspondences->at(j).index_query].normal_x, source_normals->points[correspondences->at(j).index_query].normal_y, source_normals->points[correspondences->at(j).index_query].normal_z);
 			Eigen::Vector3f normal_t2(target_normals->points[correspondences->at(j).index_match].normal_x, target_normals->points[correspondences->at(j).index_match].normal_y, target_normals->points[correspondences->at(j).index_match].normal_z);
-			T2 = target->points[correspondences->at(j).index_match];
-			S2 = source->points[correspondences->at(j).index_query];
+			pcl::PointXYZ T2 = target->points[correspondences->at(j).index_match];
+			pcl::PointXYZ S2 = source->points[correspondences->at(j).index_query];
 			Eigen::Vector3f source_pnt(S2.x - S1.x, S2.y - S1.y, S2.z - S1.z);
 			Eigen::Vector3f target_pnt(T2.x - T1.x, T2.y - T1.y, T2.z - T1.z);
 			float ds = source_pnt.norm();
@@ -384,6 +422,7 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 			}
 			iteration_ransac += 1;
 		}
+		if (iteration_ransac >= n_ransac) break;
 	}
 	auto lest_ransac = std::min_element(std::begin(score_ransac), std::end(score_ransac));                   //��ȡ��Сֵָ��  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
 	int minIndex_ransac = std::distance(std::begin(score_ransac), lest_ransac);                             //��ȡ��Сֵ����

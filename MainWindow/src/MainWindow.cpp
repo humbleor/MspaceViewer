@@ -1,4 +1,4 @@
-﻿#include "../include/MainWindow.h"
+#include "../include/MainWindow.h"
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <QtWidgets/QProgressBar>
@@ -113,6 +113,8 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
         _rootNode->appendRow(fileNode);
         _itemToPointCloud.insert(std::make_pair(fileNode, inputFileNode));
         ui._fileTree->show();
+
+        updatePropertyPanel(inputFiles, inputFileNode);
     }
     catch (const std::exception&)
     {
@@ -192,8 +194,12 @@ void MainWindow::DeleteData()
 void MainWindow::loadFile()
 {
     QStringList fileTypes;
-    fileTypes << "LAS Files (*.las)";
-    QString file = QFileDialog::getOpenFileName(this, tr("Select LAS File"), "", fileTypes.join(";;"));
+    fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+              << "LAS Files (*.las)"
+              << "LAZ Files (*.laz)"
+              << "PCD Files (*.pcd)"
+              << "PLY Files (*.ply)";
+    QString file = QFileDialog::getOpenFileName(this, tr("Select Point Cloud File"), "", fileTypes.join(";;"));
     if (file.isEmpty())
     {
         ui._Logger->insertPlainText(tr("Please select a valid file!") + "\n");
@@ -276,6 +282,45 @@ void MainWindow::changeLanguage_English()
     qApp->installTranslator(&english);
     ui.retranslateUi(this);
     output_English = true;
+}
+
+void MainWindow::updatePropertyPanel(const std::string& fileName, osg::ref_ptr<osg::MSpaceNode> node)
+{
+    ui._ProPertyTable->clear();
+    ui._ProPertyTable->setColumnCount(2);
+    ui._ProPertyTable->setHorizontalHeaderLabels({ tr("Property"), tr("Value") });
+    ui._ProPertyTable->horizontalHeader()->setStretchLastSection(true);
+
+    QStringList properties;
+    QStringList values;
+
+    properties << tr("File Name");
+    values << QString::fromStdString(std::filesystem::path(fileName).filename().string());
+
+    properties << tr("File Format");
+    values << QString::fromStdString(std::filesystem::path(fileName).extension().string());
+
+    if (node.valid())
+    {
+        osg::BoundingSphere bs = node->getBound();
+        properties << tr("Center X") << tr("Center Y") << tr("Center Z");
+        values << QString::number(bs.center().x(), 'f', 4)
+               << QString::number(bs.center().y(), 'f', 4)
+               << QString::number(bs.center().z(), 'f', 4);
+
+        properties << tr("Bounding Radius");
+        values << QString::number(bs.radius(), 'f', 4);
+    }
+
+    properties << tr("Children Count");
+    values << QString::number(node->getNumChildren());
+
+    ui._ProPertyTable->setRowCount(properties.size());
+    for (int i = 0; i < properties.size(); i++)
+    {
+        ui._ProPertyTable->setItem(i, 0, new QTableWidgetItem(properties[i]));
+        ui._ProPertyTable->setItem(i, 1, new QTableWidgetItem(values[i]));
+    }
 }
 
 //void MainWindow::treeEvaluation()

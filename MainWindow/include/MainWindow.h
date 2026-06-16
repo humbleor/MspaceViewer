@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <QtWidgets/QMainWindow>
 #include <QtGui/QStandardItemModel>
@@ -47,6 +47,8 @@ private:
 	void registration_TLS();
     //森林点云配准
     void registration_Forest();
+    //更新属性面板
+    void updatePropertyPanel(const std::string& fileName, osg::ref_ptr<osg::MSpaceNode> node);
     //转化到中文
     void changeLanguage_Chinese();
     //转化到英文

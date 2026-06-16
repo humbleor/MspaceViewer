@@ -10,7 +10,7 @@
 
 #include <osg/ArgumentParser>
 
-#include <QtWidgets/QOpenGLWidget>
+#include <QtOpenGLWidgets/QOpenGLWidget>
 #include <QtGui/QOpenGLFunctions>
 #include <QtCore/QReadWriteLock>
 

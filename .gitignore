@@ -1,6 +1,8 @@
 .vscode/
 build/
+vcpkg_installed/
 
 .claude/
+.mimocode/
 CLAUDE.md
 DEVLOG.md

@@ -1,4 +1,5 @@
 project(osgQt LANGUAGES CXX)
+set(CMAKE_AUTOMOC ON)
 
 add_library(osgQt SHARED
     src/CullVisitorEx.cpp
@@ -20,14 +21,15 @@ target_include_directories(osgQt
 
 target_link_libraries(osgQt
     PUBLIC
-        OpenSceneGraph::osg
-        OpenSceneGraph::osgDB
-        OpenSceneGraph::osgUtil
-        OpenSceneGraph::osgGA
-        OpenSceneGraph::osgViewer
-        OpenThreads::OpenThreads
+        unofficial::osg::osg
+        unofficial::osg::osgDB
+        unofficial::osg::osgUtil
+        unofficial::osg::osgGA
+        unofficial::osg::osgViewer
+        unofficial::osg::OpenThreads
         ${QT_LIB_PREFIX}::Widgets
         ${QT_LIB_PREFIX}::OpenGL
+        ${QT_LIB_PREFIX}::OpenGLWidgets
 )
 
 set_target_properties(osgQt PROPERTIES

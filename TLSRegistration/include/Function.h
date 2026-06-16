@@ -34,11 +34,11 @@ using namespace std;
 
 DLL_EXPORT void cloud_with_normal(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, pcl::PointCloud<pcl::PointNormal>::Ptr& cloud_normals);
 
-DLL_EXPORT vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, int num_sectors);
+DLL_EXPORT vector<vector<int>> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, int num_sectors);
 
-DLL_EXPORT pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, float angle_start);
+DLL_EXPORT pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr original_cloud, const vector<int>& indices, float R, float angle_start);
 
-DLL_EXPORT vector<vector<pcl::PointXYZ>> get_rhombus_descriptors(pcl::PointCloud<pcl::PointXYZ>::Ptr raw_patch, float Angle_starting, float r, float step);
+DLL_EXPORT vector<vector<pcl::PointXYZ>> get_rhombus_descriptors(const pcl::PointCloud<pcl::PointXYZ>::Ptr& original_cloud, const vector<int>& indices, float Angle_starting, float r, float step);
 
 DLL_EXPORT float calculateStandardDeviation(const std::vector<float>& vec1, float diff);
 

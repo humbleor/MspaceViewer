@@ -1,4 +1,10 @@
 #include "../include/LoadLasFile.h"
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <liblas/liblas.hpp>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 
 void loadLasFile(std::string inputPath, PointCloud3fPtr pointcloud)
 {
@@ -6,48 +12,93 @@ void loadLasFile(std::string inputPath, PointCloud3fPtr pointcloud)
 		std::cout << "File path does not exist!!!" << std::endl;
 		return;
 	}
-	//creat the reader
-	laszip_POINTER reader;
-	laszip_create(&reader);
-	//open the reader
-	laszip_BOOL isCompressed = 0;
-	laszip_open_reader(reader, inputPath.c_str(), &isCompressed);
 
-	laszip_header* header;
-	laszip_get_header_pointer(reader, &header);
+	std::string ext = std::filesystem::path(inputPath).extension().string();
+	std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-	//points number
-	laszip_I64 numPoints = (header->number_of_point_records ? header->number_of_point_records : header->extended_number_of_point_records);
-
-	//get a point to the points that will be read
-	laszip_point* pointer;
-	laszip_get_point_pointer(reader, &pointer);
-
-	double scale_x = header->x_scale_factor;
-	double scale_y = header->y_scale_factor;
-	double scale_z = header->z_scale_factor;
-	double offset_x = header->x_offset;
-	double offset_y = header->y_offset;
-	double offset_z = header->z_offset;
-
-	laszip_I64 count = 0;
-
-	Point3f point;
-
-	while (count < numPoints)
+	if (ext == ".pcd")
 	{
-		laszip_read_point(reader);
-
-		point.coords()[0] = pointer->X * scale_x + offset_x;
-		point.coords()[1] = pointer->Y * scale_y + offset_y;
-		point.coords()[2] = pointer->Z * scale_z + offset_z;
-
-		pointcloud->addPoint(point);
-		count++;
+		pcl::PointCloud<pcl::PointXYZ> pclCloud;
+		if (pcl::io::loadPCDFile<pcl::PointXYZ>(inputPath, pclCloud) == -1)
+		{
+			std::cout << "Couldn't read PCD file: " << inputPath << std::endl;
+			return;
+		}
+		for (const auto& p : pclCloud.points)
+		{
+			Point3f point;
+			point.coords()[0] = p.x;
+			point.coords()[1] = p.y;
+			point.coords()[2] = p.z;
+			pointcloud->addPoint(point);
+		}
 	}
+	else if (ext == ".ply")
+	{
+		pcl::PointCloud<pcl::PointXYZ> pclCloud;
+		if (pcl::io::loadPLYFile<pcl::PointXYZ>(inputPath, pclCloud) < 0)
+		{
+			std::cout << "Couldn't read PLY file: " << inputPath << std::endl;
+			return;
+		}
+		for (const auto& p : pclCloud.points)
+		{
+			Point3f point;
+			point.coords()[0] = p.x;
+			point.coords()[1] = p.y;
+			point.coords()[2] = p.z;
+			pointcloud->addPoint(point);
+		}
+	}
+	else if (ext == ".las" || ext == ".laz")
+	{
+		//creat the reader
+		laszip_POINTER reader;
+		laszip_create(&reader);
+		//open the reader
+		laszip_BOOL isCompressed = 0;
+		laszip_open_reader(reader, inputPath.c_str(), &isCompressed);
 
-	laszip_close_reader(reader);
-	laszip_destroy(reader);
+		laszip_header* header;
+		laszip_get_header_pointer(reader, &header);
+
+		//points number
+		laszip_I64 numPoints = (header->number_of_point_records ? header->number_of_point_records : header->extended_number_of_point_records);
+
+		//get a point to the points that will be read
+		laszip_point* pointer;
+		laszip_get_point_pointer(reader, &pointer);
+
+		double scale_x = header->x_scale_factor;
+		double scale_y = header->y_scale_factor;
+		double scale_z = header->z_scale_factor;
+		double offset_x = header->x_offset;
+		double offset_y = header->y_offset;
+		double offset_z = header->z_offset;
+
+		laszip_I64 count = 0;
+
+		Point3f point;
+
+		while (count < numPoints)
+		{
+			laszip_read_point(reader);
+
+			point.coords()[0] = pointer->X * scale_x + offset_x;
+			point.coords()[1] = pointer->Y * scale_y + offset_y;
+			point.coords()[2] = pointer->Z * scale_z + offset_z;
+
+			pointcloud->addPoint(point);
+			count++;
+		}
+
+		laszip_close_reader(reader);
+		laszip_destroy(reader);
+	}
+	else
+	{
+		std::cout << "Unsupported file format: " << ext << std::endl;
+	}
 }
 
 void outputLasFile(std::string outputPath, PointCloud3fPtr pointcloud)

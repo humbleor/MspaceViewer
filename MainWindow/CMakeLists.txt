@@ -1,4 +1,7 @@
 project(MainWindow LANGUAGES CXX)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 # ── Qt UI 文件 ──
 set(UI_FILES
@@ -65,8 +68,9 @@ target_include_directories(MspaceViewer
     # Forest_TLS_Reg headers
     PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include
     PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src
+    # libLAS & OpenCV (found by root CMakeLists.txt)
     PRIVATE ${libLAS_INCLUDE_DIR}
-    PRIVATE D:/vcpkg/installed/x64-windows-release/include
+    PRIVATE ${OpenCV_INCLUDE_DIRS}
 )
 
 target_link_libraries(MspaceViewer
@@ -77,13 +81,13 @@ target_link_libraries(MspaceViewer
         ${QT_LIB_PREFIX}::Core
         ${QT_LIB_PREFIX}::Gui
         # OSG
-        OpenSceneGraph::osg
-        OpenSceneGraph::osgDB
-        OpenSceneGraph::osgUtil
-        OpenSceneGraph::osgGA
-        OpenSceneGraph::osgViewer
-        OpenSceneGraph::osgText
-        OpenSceneGraph::osgVolume
+        unofficial::osg::osg
+        unofficial::osg::osgDB
+        unofficial::osg::osgUtil
+        unofficial::osg::osgGA
+        unofficial::osg::osgViewer
+        unofficial::osg::osgText
+        unofficial::osg::osgVolume
         # 项目内部库
         osgQt
         MspaceOctree
@@ -91,26 +95,17 @@ target_link_libraries(MspaceViewer
         D4PCR
         TLSRegistration
         # PCL（OutlierRemovalRegistration 直接使用 PCL）
-        PCL::common PCL::io PCL::filters PCL::features PCL::registration PCL::search PCL::kdtree
+        pcl_common pcl_io pcl_filters pcl_features pcl_registration pcl_search pcl_kdtree
         Eigen3::Eigen
         # Forest_TLS_Reg dependencies
-        ${OpenCV_LIBRARIES}
+        opencv_world
         ${libLAS_LIBRARY}
         ${libLAS_C_LIBRARY}
         Boost::regex Boost::serialization
-)
-
-# Link small_gicp (import library for the DLL)
-target_link_libraries(MspaceViewer PRIVATE
-    D:/vcpkg/installed/x64-windows-release/lib/small_gicp.lib
-)
-
-# Copy small_gicp.dll to output directory
-add_custom_command(TARGET MspaceViewer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "D:/vcpkg/installed/x64-windows-release/bin/small_gicp.dll"
-        "$<TARGET_FILE_DIR:MspaceViewer>"
-    COMMENT "Copying small_gicp.dll..."
+        # small_gicp (header-only, embedded)
+        small_gicp
+        # OpenMP
+        OpenMP::OpenMP_CXX
 )
 
 set_target_properties(MspaceViewer PROPERTIES
@@ -126,16 +121,21 @@ add_custom_command(TARGET MspaceViewer POST_BUILD
     COMMENT "Copying resource files to output directory"
 )
 
-# ── 拷贝 vcpkg 所有 runtime DLL（Release/Debug 分别从对应目录拷贝）──
+# ── 自动拷贝所有 transitive runtime DLL（OSG, libLAS, Qt 等）──
 add_custom_command(TARGET MspaceViewer POST_BUILD
-    COMMAND cmd /c "copy /y \"$<IF:$<CONFIG:Debug>,${OSG_BIN_DIR_DEBUG},${OSG_BIN_DIR}>\\*.dll\" \"$<TARGET_FILE_DIR:MspaceViewer>\" > nul"
-    COMMENT "Copying vcpkg runtime DLLs..."
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_RUNTIME_DLLS:MspaceViewer>"
+        "$<TARGET_FILE_DIR:MspaceViewer>"
+    COMMAND_EXPAND_LISTS
+    COMMENT "Copying runtime DLL dependencies..."
 )
 
 # ── 拷贝 Qt platform 插件 ──
+get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION)
+cmake_path(GET _qt_core_loc PARENT_PATH _qt_bin_dir)
 add_custom_command(TARGET MspaceViewer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "$<IF:$<CONFIG:Debug>,${OSG_BIN_DIR_DEBUG}/../plugins/platforms,${OSG_BIN_DIR}/../plugins/platforms>"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        "${_qt_bin_dir}/../plugins/platforms"
         "$<TARGET_FILE_DIR:MspaceViewer>/platforms"
     COMMENT "Copying Qt platform plugin..."
 )

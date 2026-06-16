@@ -1,210 +1,169 @@
-#include "../include/Function.h"
+#include "Function.h"
 
 void cloud_with_normal(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, pcl::PointCloud<pcl::PointNormal>::Ptr& cloud_normals)
 {
-	//-----------------Æ´½ÓµãÔÆÊı¾İÓë·¨ÏßĞÅÏ¢---------------------
-	pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> n;//OMP¼ÓËÙ
+	//-----------------æ‹¼æ¥ç‚¹äº‘å’Œæ³•çº¿ä¿¡æ¯---------------------
+	pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> n;//OMPåŠ é€Ÿ
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-	//½¨Á¢kdtreeÀ´½øĞĞ½üÁÚµã¼¯ËÑË÷
+	//å»ºç«‹kdtreeæ¥è¿›è¡Œè¿‘é‚»ç‚¹é›†æœç´¢
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
-	n.setNumberOfThreads(10);//ÉèÖÃopenMPµÄÏß³ÌÊı
-	//n.setViewPoint(0,0,0);//ÉèÖÃÊÓµã£¬Ä¬ÈÏÎª£¨0£¬0£¬0£©
+	n.setNumberOfThreads(10);//è®¾ç½®openMPçš„çº¿ç¨‹æ•°
+	//n.setViewPoint(0,0,0);//è®¾ç½®è§†ç‚¹ï¼Œé»˜è®¤ä¸ºï¼ˆ0ï¼Œ0ï¼Œ0ï¼‰
 	n.setInputCloud(cloud);
 	n.setSearchMethod(tree);
-	n.setKSearch(10);//µãÔÆ·¨Ïò¼ÆËãÊ±£¬ĞèÒªËùËÑµÄ½üÁÚµã´óĞ¡
-	//n.setRadiusSearch(0.03);//°ë¾¶ËÑËØ
-	n.compute(*normals);//¿ªÊ¼½øĞĞ·¨Ïò¼Æ
-	//½«µãÔÆÊı¾İÓë·¨ÏòĞÅÏ¢Æ´½Ó
+	n.setKSearch(10);//ç‚¹äº‘æ³•çº¿è®¡ç®—æ—¶ï¼Œéœ€è¦æ‰€æœçš„è¿‘é‚»ç‚¹å¤§å°
+	//n.setRadiusSearch(0.03);//åŠå¾„æœç´¢
+	n.compute(*normals);//å¼€å§‹è¿›è¡Œæ³•çº¿è®¡ç®—
+	//å°†ç‚¹äº‘æ•°æ®ä¸æ³•çº¿ä¿¡æ¯æ‹¼æ¥
 	pcl::concatenateFields(*cloud, *normals, *cloud_normals);
 }
 
-vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, int num_sectors)
+vector<vector<int>> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, int num_sectors)
 {
+	vector<vector<int>> rhombus_indices(num_sectors);
+	size_t npts = cloud->points.size();
 
-	int Times = 0;
-	//std::vector <pcl::PointCloud<pcl::PointXYZ>::Ptr> rhombus_pointclouds(num_sectors);
-	std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> rhombus_pointclouds(num_sectors, nullptr);
-	for (size_t i = 0; i < num_sectors / 3; i++)
+	for (size_t i = 0; i < static_cast<size_t>(num_sectors / 3); i++)
 	{
-		pcl::PointCloud<pcl::PointXYZ>::Ptr rhombus1(new pcl::PointCloud<pcl::PointXYZ>);
-		pcl::PointCloud<pcl::PointXYZ>::Ptr rhombus2(new pcl::PointCloud<pcl::PointXYZ>);
-		pcl::PointCloud<pcl::PointXYZ>::Ptr rhombus3(new pcl::PointCloud<pcl::PointXYZ>);
-		/*	std::cout << "rhombus1->points.size(): " << rhombus1->points.size() << endl;
-			std::cout << "rhombus2->points.size(): " << rhombus2->points.size() << endl;
-			std::cout << "rhombus3->points.size(): " << rhombus3->points.size() << endl;*/
-			//rhombus1 i 0-119		
-		const float end_num1 = 360.0 / num_sectors * i + 120;//120-239
-		//rhombus2 i+120		120-239	
-		const float end_num2 = 360.0 / num_sectors * i + 240;//240-359
-		//rhombus3 i+240	240-359	
-		const float end_num3 = 360.0 / num_sectors * i + 360;//360-479
-		for (auto it = cloud->begin(); it != cloud->end(); ++it)
+		const float end_num1 = 360.0f / num_sectors * i + 120.f;
+		const float end_num2 = 360.0f / num_sectors * i + 240.f;
+
+		// Precompute cos/sin for the three rhombus centers (avoid recomputing per point)
+		const float cx1 = R * cosf((360.0f / num_sectors * i + 60.f) / 180.0f * M_PI);
+		const float sy1 = R * sinf((360.0f / num_sectors * i + 60.f) / 180.0f * M_PI);
+		const float cx2 = R * cosf((360.0f / num_sectors * i + 180.f) / 180.0f * M_PI);
+		const float sy2 = R * sinf((360.0f / num_sectors * i + 180.f) / 180.0f * M_PI);
+		const float cx3 = R * cosf((360.0f / num_sectors * i + 300.f) / 180.0f * M_PI);
+		const float sy3 = R * sinf((360.0f / num_sectors * i + 300.f) / 180.0f * M_PI);
+
+		const float dx_o2o1 = -cx1, dy_o2o1 = -sy1;
+		const float len_o2o1 = R;
+		const float dx_o3o1 = -cx2, dy_o3o1 = -sy2;
+		const float len_o3o1 = R;
+		const float dx_o4o1 = -cx3, dy_o4o1 = -sy3;
+		const float len_o4o1 = R;
+
+		vector<int>& idx1 = rhombus_indices[i];
+		vector<int>& idx2 = rhombus_indices[i + num_sectors / 3];
+		vector<int>& idx3 = rhombus_indices[i + num_sectors / 3 * 2];
+
+		// Reserve approximate capacity (~1/3 of points each, plus margin)
+		idx1.reserve(npts / num_sectors + npts / num_sectors / 2);
+		idx2.reserve(npts / num_sectors + npts / num_sectors / 2);
+		idx3.reserve(npts / num_sectors + npts / num_sectors / 2);
+
+		for (int pt_idx = 0; pt_idx < static_cast<int>(npts); ++pt_idx)
 		{
-			pcl::PointXYZ point = *it;
-			// ¼ÆËãµãµÄ¼«×ø±ê½Ç¶ÈºÍ¾àÀë
-			float theta = std::atan2(point.y, point.x);
-			float r = std::sqrt(point.x * point.x + point.y * point.y);
-			if (r > R)
-			{
-				continue;
-			}
+			const pcl::PointXYZ& point = cloud->points[pt_idx];
+			float theta = atan2f(point.y, point.x);
+			float r = sqrtf(point.x * point.x + point.y * point.y);
+			if (r > R) continue;
 
-			if (theta < 0)
-			{
-				theta += 2 * M_PI;
-			}
-			theta = theta / M_PI * 180.0;
+			if (theta < 0) theta += 2.f * M_PI;
+			theta = theta / M_PI * 180.f;
 
-			if (360.0 / num_sectors * i <= theta && theta <= end_num1)
+			if (360.0f / num_sectors * i <= theta && theta <= end_num1)
 			{
-				const float dx_o2o1 = -R * cos((360.0 / num_sectors * i + 60) / 180.0f * M_PI);
-				const float dy_o2o1 = -R * sin((360.0 / num_sectors * i + 60) / 180.0f * M_PI);
-				const float dx_o2p = point.x - R * cos((360.0 / num_sectors * i + 60) / 180.0f * M_PI);
-				const float dy_o2p = point.y - R * sin((360.0 / num_sectors * i + 60) / 180.0f * M_PI);
+				const float dx_o2p = point.x - cx1;
+				const float dy_o2p = point.y - sy1;
 				const float dot_product = dx_o2o1 * dx_o2p + dy_o2o1 * dy_o2p;
-				const float angle1 = acos(dot_product / (std::sqrt(dx_o2o1 * dx_o2o1 + dy_o2o1 * dy_o2o1) * std::sqrt(dx_o2p * dx_o2p + dy_o2p * dy_o2p)));
-				if (angle1 <= M_PI / 3)
-				{
-					rhombus1->points.push_back(point);
-				}
-
+				const float angle1 = acosf(dot_product / (len_o2o1 * sqrtf(dx_o2p * dx_o2p + dy_o2p * dy_o2p)));
+				if (angle1 <= M_PI / 3.f) idx1.push_back(pt_idx);
 			}
-			else if ((360.0 / num_sectors * i + 120) * 1.0 <= theta && theta <= end_num2)
+			else if ((360.0f / num_sectors * i + 120.f) <= theta && theta <= end_num2)
 			{
-				const float dx_o3o1 = -R * cos((360.0 / num_sectors * i + 180) / 180.0f * M_PI);
-				const float dy_o3o1 = -R * sin((360.0 / num_sectors * i + 180) / 180.0f * M_PI);
-				const float dx_o3p = point.x - R * cos((360.0 / num_sectors * i + 180) / 180.0f * M_PI);
-				const float dy_o3p = point.y - R * sin((360.0 / num_sectors * i + 180) / 180.0f * M_PI);
+				const float dx_o3p = point.x - cx2;
+				const float dy_o3p = point.y - sy2;
 				const float dot_product2 = dx_o3o1 * dx_o3p + dy_o3o1 * dy_o3p;
-				const float angle2 = acos(dot_product2 / (std::sqrt(dx_o3o1 * dx_o3o1 + dy_o3o1 * dy_o3o1) * std::sqrt(dx_o3p * dx_o3p + dy_o3p * dy_o3p)));
-				if (angle2 <= M_PI / 3)
-				{
-					rhombus2->points.push_back(point);
-				}
+				const float angle2 = acosf(dot_product2 / (len_o3o1 * sqrtf(dx_o3p * dx_o3p + dy_o3p * dy_o3p)));
+				if (angle2 <= M_PI / 3.f) idx2.push_back(pt_idx);
 			}
-			else /*(((360.0 / num_sectors * i + 240) * 1.0 <= theta && theta < 360.0) || (0.0 <= theta && theta <= (end_num3 - 360.0)))*/
+			else
 			{
-				const float dx_o4o1 = -R * cos((360.0 / num_sectors * i + 300) / 180.0f * M_PI);
-				const float dy_o4o1 = -R * sin((360.0 / num_sectors * i + 300) / 180.0f * M_PI);
-				const float dx_o4p = point.x - R * cos((360.0 / num_sectors * i + 300) / 180.0f * M_PI);
-				const float dy_o4p = point.y - R * sin((360.0 / num_sectors * i + 300) / 180.0f * M_PI);
+				const float dx_o4p = point.x - cx3;
+				const float dy_o4p = point.y - sy3;
 				const float dot_product3 = dx_o4o1 * dx_o4p + dy_o4o1 * dy_o4p;
-				const float angle3 = acos(dot_product3 / (std::sqrt(dx_o4o1 * dx_o4o1 + dy_o4o1 * dy_o4o1) * std::sqrt(dx_o4p * dx_o4p + dy_o4p * dy_o4p)));
-				if (angle3 <= M_PI / 3)
-				{
-					rhombus3->points.push_back(point);
-				}
+				const float angle3 = acosf(dot_product3 / (len_o4o1 * sqrtf(dx_o4p * dx_o4p + dy_o4p * dy_o4p)));
+				if (angle3 <= M_PI / 3.f) idx3.push_back(pt_idx);
 			}
 		}
-
-		/*	std::cout << "rhombus1->points.size(): " << rhombus1->points.size() << endl;
-			std::cout << "rhombus2->points.size(): " << rhombus2->points.size() << endl;
-			std::cout << "rhombus3->points.size(): " << rhombus3->points.size() << endl;*/
-
-		rhombus1->width = rhombus1->points.size();
-		rhombus1->height = 1;
-		rhombus2->width = rhombus2->points.size();
-		rhombus2->height = 1;
-		rhombus3->width = rhombus3->points.size();
-		rhombus3->height = 1;
-		Times += 1;
-		rhombus_pointclouds[i] = rhombus1;
-		rhombus_pointclouds[i + num_sectors / 3] = rhombus2;
-		rhombus_pointclouds[i + num_sectors / 3 * 2] = rhombus3;
-
 	}
 
 	int yushu = num_sectors % 3;
 	if (yushu > 0)
 	{
-		for (size_t i = 0; i < yushu; i++)
+		for (size_t i = 0; i < static_cast<size_t>(yushu); i++)
 		{
-			pcl::PointCloud<pcl::PointXYZ>::Ptr rhombus(new pcl::PointCloud<pcl::PointXYZ>);
+			vector<int>& idx = rhombus_indices[num_sectors - 1 - i];
+			idx.reserve(npts / num_sectors + npts / num_sectors / 2);
 
-			for (auto it = cloud->begin(); it != cloud->end(); ++it)
+			const float cxo = R * cosf((360.f - 360.f / num_sectors * (i + 1) + 60.f) / 180.0f * M_PI);
+			const float syo = R * sinf((360.f - 360.f / num_sectors * (i + 1) + 60.f) / 180.0f * M_PI);
+			const float dx_o4o1 = -cxo, dy_o4o1 = -syo;
+			const float len_o4o1 = R;
+
+			const float ang_lo = 360.f - 360.f / num_sectors * (i + 1);
+			const float ang_hi = 360.f - 360.f / num_sectors * (i + 1) + 120.f - 360.f;
+
+			for (int pt_idx = 0; pt_idx < static_cast<int>(npts); ++pt_idx)
 			{
-				pcl::PointXYZ point = *it;
-				// ¼ÆËãµãµÄ¼«×ø±ê½Ç¶ÈºÍ¾àÀë
-				float theta = std::atan2(point.y, point.x);
-				float r = std::sqrt(point.x * point.x + point.y * point.y);
-				if (r > R)
-				{
-					continue;
-				}
+				const pcl::PointXYZ& point = cloud->points[pt_idx];
+				float theta = atan2f(point.y, point.x);
+				float r = sqrtf(point.x * point.x + point.y * point.y);
+				if (r > R) continue;
 
-				if (theta < 0)
-				{
-					theta += 2 * M_PI;
-				}
-				theta = theta / M_PI * 180.0;
+				if (theta < 0) theta += 2.f * M_PI;
+				theta = theta / M_PI * 180.f;
 
-				if ((360 - 360.0 / num_sectors * (i + 1) <= theta && theta < 360.0) || (0.0 <= theta && theta <= (360 - 360.0 / num_sectors * (i + 1) + 120 - 360.0)))
+				if ((ang_lo <= theta && theta < 360.f) || (0.f <= theta && theta <= ang_hi))
 				{
-					const float dx_o4o1 = -R * cos((360 - 360.0 / num_sectors * (i + 1) + 60) / 180.0f * M_PI);
-					const float dy_o4o1 = -R * sin((360 - 360.0 / num_sectors * (i + 1) + 60) / 180.0f * M_PI);
-					const float dx_o4p = point.x - R * cos((360 - 360.0 / num_sectors * (i + 1) + 60) / 180.0f * M_PI);
-					const float dy_o4p = point.y - R * sin((360 - 360.0 / num_sectors * (i + 1) + 60) / 180.0f * M_PI);
+					const float dx_o4p = point.x - cxo;
+					const float dy_o4p = point.y - syo;
 					const float dot_product3 = dx_o4o1 * dx_o4p + dy_o4o1 * dy_o4p;
-					const float angle = acos(dot_product3 / (std::sqrt(dx_o4o1 * dx_o4o1 + dy_o4o1 * dy_o4o1) * std::sqrt(dx_o4p * dx_o4p + dy_o4p * dy_o4p)));
-					if (angle <= M_PI / 3)
-					{
-						rhombus->points.push_back(point);
-					}
+					const float angle = acosf(dot_product3 / (len_o4o1 * sqrtf(dx_o4p * dx_o4p + dy_o4p * dy_o4p)));
+					if (angle <= M_PI / 3.f) idx.push_back(pt_idx);
 				}
 			}
-
-
-			rhombus->width = rhombus->points.size();
-			rhombus->height = 1;
-			rhombus_pointclouds[num_sectors - 1 - i] = rhombus;
-			//std::cout << "ÓàÊı¼ÆËãÁËn´Î: " << i+1 << endl;
 		}
 	}
 
-	return rhombus_pointclouds;
+	return rhombus_indices;
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float R, float angle_start)
+pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::Ptr original_cloud, const vector<int>& indices, float R, float angle_start)
 {
-
 	pcl::PointCloud<pcl::PointXYZ>::Ptr rhombus1(new pcl::PointCloud<pcl::PointXYZ>);
 	float  angle_starting = angle_start;
 	float angle_ending = angle_starting + 120.0;
 
-	for (auto it = cloud->begin(); it != cloud->end(); ++it)
-	{
-		pcl::PointXYZ point = *it;
-		// ¼ÆËãµãµÄ¼«×ø±ê½Ç¶ÈºÍ¾àÀë
-		float theta = std::atan2(point.y, point.x);
-		float r = std::sqrt(point.x * point.x + point.y * point.y);
-		//std::cout << "r:"<< r<<" theta:" << theta <<" angle_starting:"<< angle_starting<<"  " << 111 << endl;
-		if (r > R)
-		{
-			continue;
-		}
-		if (theta < 0)
-		{
-			theta += 2 * M_PI;
-		}
-		theta = theta / M_PI * 180.0;
-		//std::cout << "r:" << r << " theta:" << theta << " " << 222 << endl;
-		const float dx_o2o1 = -R * cos((angle_starting + 60) / 180.0f * M_PI);
-		const float dy_o2o1 = -R * sin((angle_starting + 60) / 180.0f * M_PI);
-		const float dx_o2p = point.x - R * cos((angle_starting + 60) / 180.0f * M_PI);
-		const float dy_o2p = point.y - R * sin((angle_starting + 60) / 180.0f * M_PI);
-		const float dot_product = dx_o2o1 * dx_o2p + dy_o2o1 * dy_o2p;
-		const float angle1 = acos(dot_product / (std::sqrt(dx_o2o1 * dx_o2o1 + dy_o2o1 * dy_o2o1) * std::sqrt(dx_o2p * dx_o2p + dy_o2p * dy_o2p)));
-		//std::cout << "r:" << r << " theta:" << theta <<" angle1:"<< angle1 << " " << 333 << endl;
-		if (0 <= angle_starting < 240.0)
-		{
+	// Reserve capacity for the output cloud
+	rhombus1->points.reserve(indices.size());
 
+	for (int idx : indices)
+	{
+		const pcl::PointXYZ& point = (*original_cloud)[idx];
+		// è®¡ç®—æåæ ‡è§’åº¦å’Œè·ç¦»
+		float theta = atan2f(point.y, point.x);
+		float r = sqrtf(point.x * point.x + point.y * point.y);
+		if (r > R) continue;
+
+		if (theta < 0) theta += 2.f * M_PI;
+		theta = theta / M_PI * 180.f;
+
+		const float dx_o2o1 = -R * cosf((angle_starting + 60.f) / 180.0f * M_PI);
+		const float dy_o2o1 = -R * sinf((angle_starting + 60.f) / 180.0f * M_PI);
+		const float dx_o2p = point.x - R * cosf((angle_starting + 60.f) / 180.0f * M_PI);
+		const float dy_o2p = point.y - R * sinf((angle_starting + 60.f) / 180.0f * M_PI);
+		const float dot_product = dx_o2o1 * dx_o2p + dy_o2o1 * dy_o2p;
+		const float angle1 = acosf(dot_product / (sqrtf(dx_o2o1 * dx_o2o1 + dy_o2o1 * dy_o2o1) * sqrtf(dx_o2p * dx_o2p + dy_o2p * dy_o2p)));
+
+		if (0 <= angle_starting && angle_starting < 240.0)
+		{
 			if (angle_starting <= theta && theta <= angle_ending)
 			{
 				if (angle1 <= M_PI / 3)
 				{
 					rhombus1->points.push_back(point);
-					//std::cout << "angle_starting:" << angle_starting << "  angle_ending:" << angle_ending <<"push_back(point):"<<111<< endl;
-
 				}
 			}
 		}
@@ -215,8 +174,6 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointClo
 				if (angle1 <= M_PI / 3)
 				{
 					rhombus1->points.push_back(point);
-					//std::cout << "angle_starting:" << angle_starting << "  angle_ending:" << angle_ending << "push_back(point):" << 111 << endl;
-
 				}
 			}
 		}
@@ -226,89 +183,79 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr get_OverlapRhombus_pointclouds(pcl::PointClo
 	return rhombus1;
 }
 
-vector<vector<pcl::PointXYZ>> get_rhombus_descriptors(pcl::PointCloud<pcl::PointXYZ>::Ptr raw_patch, float Angle_starting, float r, float step)
+vector<vector<pcl::PointXYZ>> get_rhombus_descriptors(const pcl::PointCloud<pcl::PointXYZ>::Ptr& original_cloud, const vector<int>& indices, float Angle_starting, float r, float step)
 {
-	int Row = static_cast<int>(r * sin(60.0 * M_PI / 180.0) / step) + 1;//¸ñÍøĞĞÊı
-	int Col = Row;//¸ñÍøÁĞÊı
-	//°üº¬µãµÄ¸ñÍø
+	int Row = static_cast<int>(r * sinf(60.0f * M_PI / 180.0f) / step) + 1;
+	int Col = Row;
+	//ç½‘æ ¼çš„ä¸ªæ•°
 	vector<vector<pcl::PointCloud<pcl::PointXYZ>>> PointsInGrid(Row, vector<pcl::PointCloud<pcl::PointXYZ>>(Col));
-	Eigen::Vector3f v1(cos(Angle_starting * M_PI / 180.0), sin(Angle_starting * M_PI / 180.0), 0.0);
-	Eigen::Vector3f v2(cos((Angle_starting + 120.0) * M_PI / 180.0), sin((Angle_starting + 120.0) * M_PI / 180.0), 0.0);
-	//¼ÆËãÈÎÒ»µãËùÔÚµÄĞĞÁĞºÅ
+	Eigen::Vector3f v1(cosf(Angle_starting * M_PI / 180.0f), sinf(Angle_starting * M_PI / 180.0f), 0.0f);
+	Eigen::Vector3f v2(cosf((Angle_starting + 120.0f) * M_PI / 180.0f), sinf((Angle_starting + 120.0f) * M_PI / 180.0f), 0.0f);
+	//åˆ›å»ºä¸€ä¸ªç”¨äºä¿å­˜çš„è¡Œåˆ—
 	vector<vector<pcl::PointXYZ>> Z_PntInGrid(Row, vector<pcl::PointXYZ>(Col));
-	if (raw_patch == nullptr) {
-		std::cout << "¿ÕµãÔÆ" << endl;
+
+	if (indices.empty()) {
+		return Z_PntInGrid;
 	}
-	else
+
+	for (int idx : indices)
 	{
-		for (const auto& p : *raw_patch)/////±¨´í¡£¡£¡£¡£¡£¡£¡£
+		const pcl::PointXYZ& p = (*original_cloud)[idx];
+		Eigen::Vector3f pnt(p.x, p.y, 0.0f);
+		float dist1 = pnt.cross(v1).norm();
+		float dist2 = pnt.cross(v2).norm();
+		int rowID = static_cast<int>(dist1 / step);
+		int colID = static_cast<int>(dist2 / step);
+		if (rowID >= 0 && rowID < Row && colID >= 0 && colID < Col)
 		{
-
-			Eigen::Vector3f pnt(p.x, p.y, 0.0);
-			float dist1 = pnt.cross(v1).norm();
-			float dist2 = pnt.cross(v2).norm();
-			int rowID = static_cast<int>(dist1 / step);
-			int colID = static_cast<int>(dist2 / step);
-			//PointsInGrid[rowID][colID].push_back(p);
-			if (rowID < Row && colID < Col)
-			{
-				PointsInGrid[rowID][colID].push_back(p);
-
-			}
+			PointsInGrid[rowID][colID].push_back(p);
 		}
+	}
 
-
-		for (size_t i = 0; i < Row; i++) {
-			for (size_t j = 0; j < Col; j++)
+	for (size_t i = 0; i < static_cast<size_t>(Row); i++) {
+		for (size_t j = 0; j < static_cast<size_t>(Col); j++)
+		{
+			if (PointsInGrid[i][j].size() < 5)
 			{
-				if (PointsInGrid[i][j].size() < 5)
+				Z_PntInGrid[i][j].x = std::numeric_limits<float>::quiet_NaN();
+				Z_PntInGrid[i][j].y = std::numeric_limits<float>::quiet_NaN();
+				Z_PntInGrid[i][j].z = std::numeric_limits<float>::quiet_NaN();
+			}
+			else
+			{
+				float Z_value = 0.0f;
+				float Y_value = 0.0f;
+				float X_value = 0.0f;
+
+				for (size_t k = 0; k < PointsInGrid[i][j].size(); k++)
 				{
-
-					Z_PntInGrid[i][j].x = (std::numeric_limits<float>::quiet_NaN());
-					Z_PntInGrid[i][j].y = (std::numeric_limits<float>::quiet_NaN());
-					Z_PntInGrid[i][j].z = (std::numeric_limits<float>::quiet_NaN());
-
-					//cout <<"\n\n\n\ Something CRAZY is Happening dude!!! \n\n\n"<< endl;
+					Z_value += PointsInGrid[i][j][k].z;
+					Eigen::Vector3f pp(PointsInGrid[i][j][k].x, PointsInGrid[i][j][k].y, 0.0f);
+					Y_value += pp.cross(v2).norm();
+					X_value += pp.cross(v1).norm();
 				}
-				else
-				{
-					float Z_value = 0.0;
-					float Y_value = 0.0;
-					float X_value = 0.0;
-					float std_z = 0.0;
-
-					for (size_t k = 0; k < PointsInGrid[i][j].size(); k++)
-					{
-						Z_value += PointsInGrid[i][j][k].z;
-						Eigen::Vector3f pp(PointsInGrid[i][j][k].x, PointsInGrid[i][j][k].y, 0.0);
-						Y_value += pp.cross(v2).norm();
-						X_value += pp.cross(v1).norm();
-
-					}
-					Z_value /= PointsInGrid[i][j].size();
-					Y_value /= PointsInGrid[i][j].size();
-					X_value /= PointsInGrid[i][j].size();
-					Z_PntInGrid[i][j].x = (X_value);
-					Z_PntInGrid[i][j].y = (Y_value);
-					Z_PntInGrid[i][j].z = (Z_value);
-				}
+				Z_value /= PointsInGrid[i][j].size();
+				Y_value /= PointsInGrid[i][j].size();
+				X_value /= PointsInGrid[i][j].size();
+				Z_PntInGrid[i][j].x = X_value;
+				Z_PntInGrid[i][j].y = Y_value;
+				Z_PntInGrid[i][j].z = Z_value;
 			}
 		}
 	}
 
 	return Z_PntInGrid;
-	/////////////////////////////////////////////////////////////////////////////////////////
 }
 
 float calculateStandardDeviation(const std::vector<float>& vec1, float diff) {
-	// ¼ÆËãÆ½¾ùÖµ
+	// è®¡ç®—å¹³å‡å€¼
 	float sum = 0.0;
 	for (float num : vec1) {
 		sum += num;
 	}
 	float mean = sum / vec1.size();
 
-	// ¼ÆËã·½²î
+	// è®¡ç®—æ–¹å·®
 	float variance = 0.0;
 
 	for (size_t i = 0; i < vec1.size(); i++)
@@ -322,33 +269,30 @@ float calculateStandardDeviation(const std::vector<float>& vec1, float diff) {
 			variance += diff * diff;
 		}
 	}
-	// ¼ÆËã±ê×¼²î
+	// è®¡ç®—æ ‡å‡†å·®
 	float standardDeviation = sqrt(variance / vec1.size());
 	return standardDeviation;
 }
 
 vector<vector<pcl::PointCloud<pcl::PointXYZ>>> get_PntInrhombus(pcl::PointCloud<pcl::PointXYZ>::Ptr raw_patch, float Angle_starting, float r, float step)
 {
-	int Row = static_cast<int>(r * sin(60.0 * M_PI / 180.0) / step) + 1;//¸ñÍøĞĞÊı
-	int Col = Row;//¸ñÍøÁĞÊı
-	//°üº¬µãµÄ¸ñÍø
+	int Row = static_cast<int>(r * sinf(60.0f * M_PI / 180.0f) / step) + 1;
+	int Col = Row;
+	//ç½‘æ ¼çš„ä¸ªæ•°
 	vector<vector<pcl::PointCloud<pcl::PointXYZ>>> PointsInGrid(Row, vector<pcl::PointCloud<pcl::PointXYZ>>(Col));
-	Eigen::Vector3f v1(cos(Angle_starting * M_PI / 180.0), sin(Angle_starting * M_PI / 180.0), 0.0);
-	Eigen::Vector3f v2(cos((Angle_starting + 120.0) * M_PI / 180.0), sin((Angle_starting + 120.0) * M_PI / 180.0), 0.0);
-	//¼ÆËãÈÎÒ»µãËùÔÚµÄĞĞÁĞºÅ
-	vector<vector<pcl::PointXYZ>> Z_PntInGrid(Row, vector<pcl::PointXYZ>(Col));
+	Eigen::Vector3f v1(cosf(Angle_starting * M_PI / 180.0f), sinf(Angle_starting * M_PI / 180.0f), 0.0f);
+	Eigen::Vector3f v2(cosf((Angle_starting + 120.0f) * M_PI / 180.0f), sinf((Angle_starting + 120.0f) * M_PI / 180.0f), 0.0f);
+	//åˆ›å»ºä¸€ä¸ªç”¨äºä¿å­˜çš„è¡Œåˆ—
 	for (const auto& p : *raw_patch)
 	{
-		Eigen::Vector3f pnt(p.x, p.y, 0.0);
+		Eigen::Vector3f pnt(p.x, p.y, 0.0f);
 		float dist1 = pnt.cross(v1).norm();
 		float dist2 = pnt.cross(v2).norm();
 		int rowID = static_cast<int>(dist1 / step);
 		int colID = static_cast<int>(dist2 / step);
-		//PointsInGrid[rowID][colID].push_back(p);
-		if (rowID < Row && colID < Col)
+		if (rowID >= 0 && rowID < Row && colID >= 0 && colID < Col)
 		{
 			PointsInGrid[rowID][colID].push_back(p);
-
 		}
 	}
 
@@ -357,7 +301,7 @@ vector<vector<pcl::PointCloud<pcl::PointXYZ>>> get_PntInrhombus(pcl::PointCloud<
 
 Eigen::Matrix4f calculateFourParameterTransformation(const pcl::PointXYZ& source_point1, const pcl::PointXYZ& source_point2, const pcl::PointXYZ& target_point1, const pcl::PointXYZ& target_point2) {
 
-	// ¼ÆËãĞı×ª½Ç¶È
+	// è®¡ç®—æ—‹è½¬è§’åº¦
 	Eigen::Vector3f source_vector(source_point2.x - source_point1.x, source_point2.y - source_point1.y, 0.0);
 	Eigen::Vector3f target_vector(target_point2.x - target_point1.x, target_point2.y - target_point1.y, 0.0);
 	float target_angle = std::atan2(target_vector.y(), target_vector.x());
@@ -381,47 +325,40 @@ Eigen::Matrix4f calculateFourParameterTransformation(const pcl::PointXYZ& source
 	transformation(0, 1) = -sin(rotation_angle);
 	transformation(1, 0) = sin(rotation_angle);
 	transformation(1, 1) = cos(rotation_angle);
-	transformation(2, 3) = (target_point1.z - source_point1.z + target_point2.z - source_point2.z) / 2.0;//Z Æ½ÒÆ
+	transformation(2, 3) = (target_point1.z - source_point1.z + target_point2.z - source_point2.z) / 2.0;//Z å¹³ç§»
 	transformation(1, 3) = target_point1.y - (source_point1.x * std::sin(rotation_angle) + source_point1.y * std::cos(rotation_angle));
-	transformation(0, 3) = target_point1.x - (source_point1.x * std::cos(rotation_angle) - source_point1.y * std::sin(rotation_angle)); //X Æ½ÒÆ
+	transformation(0, 3) = target_point1.x - (source_point1.x * std::cos(rotation_angle) - source_point1.y * std::sin(rotation_angle)); //X å¹³ç§»
 	return transformation;
 }
 
 float ComputeRmse_PCR(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloudSrc, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloudTgt, float dist)
 {
-
-
 	float res = 0.0;
 	int n_points = 0;
 	float dz = 0.0;
 	float rmse;//rmse dz
 
-
 	std::vector<int> indices(1);
 	std::vector<float> sqr_distances(1);
-	//step1: ĞÂ½¨kdtreeÓÃÓÚËÑË÷
+	//step1: æ–°å»ºkdtreeè¿›è¡Œæœç´¢
 	pcl::search::KdTree<pcl::PointXYZ> tree;
 	tree.setInputCloud(cloudSrc);
 
-	//step2: ±éÀúµãÔÆÃ¿¸öµã£¬²¢ÕÒ³öÓëËü¾àÀë×î½üµÄµã
+	//step2: å¯¹äºç›®æ ‡ä¸­çš„æ¯ä¸ªç‚¹ï¼Œæ‰¾å‡ºå…¶æœ€è¿‘é‚»æºä¸­çš„ç‚¹
 	for (size_t i = 0; i < cloudTgt->points.size(); ++i)
 	{
 		pcl::PointXYZ Pnt_Tgt = cloudTgt->points[i];
 		tree.nearestKSearch(Pnt_Tgt, 1, indices, sqr_distances);
-		//step3: Í³¼Æ×îĞ¡¾àÀëºÍ¡¢ÓĞĞ§µãÊıÁ¿
+		//step3: ç»Ÿè®¡æœ€å°è·ç¦»å’Œã€æœ‰æ•ˆç‚¹æ•°
 		if (sqr_distances[0] <= dist * dist)
 		{
-
 			res += sqr_distances[0];
 			n_points += 1;
-
 		}
 		else
 		{
 			res += dist * dist;
-
 		}
-
 	}
 	rmse = sqrt(res / cloudTgt->points.size());
 	return rmse;
@@ -429,27 +366,24 @@ float ComputeRmse_PCR(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloudSrc, const
 
 pcl::PointCloud<pcl::Normal>::Ptr compute_normal(pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud, pcl::search::KdTree<pcl::PointXYZ>::Ptr tree)
 {
-	//-------------------------·¨ÏòÁ¿¹À¼Æ-----------------------
+	//-------------------------æ³•çº¿è®¡ç®—-----------------------
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 	pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> n;
 	n.setInputCloud(input_cloud);
-	n.setNumberOfThreads(2);//ÉèÖÃopenMPµÄÏß³ÌÊı
+	n.setNumberOfThreads(2);//è®¾ç½®openMPçš„çº¿ç¨‹æ•°
 	n.setSearchMethod(tree);
 	n.setKSearch(8);
 	n.compute(*normals);
 
-
 	return normals;
-
 }
 
 pcl::PointCloud<pcl::FPFHSignature33>::Ptr compute_fpfh_feature(pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud, pcl::PointCloud<pcl::Normal>::Ptr normals, pcl::search::KdTree<pcl::PointXYZ>::Ptr tree)
 {
-
-	//------------------FPFH¹À¼Æ-------------------------------
+	//------------------FPFHæè¿°å­è®¡ç®—-------------------------------
 	pcl::PointCloud<pcl::FPFHSignature33>::Ptr fpfh(new pcl::PointCloud<pcl::FPFHSignature33>);
 	pcl::FPFHEstimationOMP<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33> f;
-	f.setNumberOfThreads(2); //Ö¸¶¨8ºË¼ÆËã
+	f.setNumberOfThreads(2); //æŒ‡å®š8æ ¸è®¡ç®—
 	f.setInputCloud(input_cloud);
 	f.setInputNormals(normals);
 	f.setSearchMethod(tree);
@@ -457,5 +391,4 @@ pcl::PointCloud<pcl::FPFHSignature33>::Ptr compute_fpfh_feature(pcl::PointCloud<
 	f.compute(*fpfh);
 
 	return fpfh;
-
 }

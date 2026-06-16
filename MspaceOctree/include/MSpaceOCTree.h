@@ -5,6 +5,14 @@
 #include "converter_utils.h"
 #include <iostream>
 #include <execution>
+#include <fstream>
+#include <filesystem>
+
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
+#include <liblas/liblas.hpp>
 
 #include "../modules/unsuck/unsuck.hpp"
 #include "chunker_countsort_laszip.h"
@@ -40,6 +48,10 @@ private:
     Stats computeStats(vector<Source> sources);
     void chunking(Options& options, vector<Source>& sources, string targetDir, Stats& stats, State& state, Attributes outputAttributes);
     void indexing(Options& options, string targetDir, State& state);
+    std::string convertToLas(const std::string& filePath, const std::string& outputDir);
+    static bool isLasFile(const std::string& path);
+    static bool isPcdFile(const std::string& path);
+    static bool isPlyFile(const std::string& path);
 
 
 private:

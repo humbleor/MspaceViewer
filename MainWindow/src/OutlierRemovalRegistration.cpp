@@ -28,7 +28,11 @@ OutlierRemovalRegistration::~OutlierRemovalRegistration()
 void OutlierRemovalRegistration::selectInputFileOfSource()
 {
 	QStringList fileTypes;
-	fileTypes << "PCD Files (*.pcd)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Source File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;
@@ -38,7 +42,11 @@ void OutlierRemovalRegistration::selectInputFileOfSource()
 void OutlierRemovalRegistration::selectInputFileOfTarget()
 {
 	QStringList fileTypes;
-	fileTypes << "PCD Files (*.pcd)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Target File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;

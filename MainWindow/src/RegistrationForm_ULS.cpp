@@ -34,7 +34,11 @@ void RegistrationULS::reject()
 void RegistrationULS::selectInputFileOfSource()
 {
 	QStringList fileTypes;
-	fileTypes << "LAS Files (*.las)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Source File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;
@@ -44,7 +48,11 @@ void RegistrationULS::selectInputFileOfSource()
 void RegistrationULS::selectInputFileOfTarget()
 {
 	QStringList fileTypes;
-	fileTypes << "LAS Files (*.las)";
+	fileTypes << "All Point Cloud Files (*.las *.laz *.pcd *.ply)"
+			  << "LAS Files (*.las)"
+			  << "LAZ Files (*.laz)"
+			  << "PCD Files (*.pcd)"
+			  << "PLY Files (*.ply)";
 	QString file = QFileDialog::getOpenFileName(this, tr("Select Target File"), "", fileTypes.join(";;"));
 	if (file.isEmpty())
 		return;

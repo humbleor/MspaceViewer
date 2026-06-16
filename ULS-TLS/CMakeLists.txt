@@ -1,5 +1,8 @@
 project(ULS-TLS LANGUAGES CXX)
 
+# ── PCL ──
+find_package(PCL 1.14 REQUIRED COMPONENTS common io)
+
 add_library(ULS-TLS SHARED
     src/LoadLasFile.cpp
     src/RegistrationU2T.cpp
@@ -11,10 +14,13 @@ target_include_directories(ULS-TLS
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
     # laszip_api.h 通过 <laszip/laszip_api.h> 引用，需将 libs 目录加入路径
     PUBLIC ${CMAKE_SOURCE_DIR}/MspaceOctree/libs
+    PUBLIC ${PCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(ULS-TLS
     PUBLIC laszip
+    PUBLIC ${PCL_LIBRARIES}
+    PUBLIC ${libLAS_LIBRARY}
 )
 
 set_target_properties(ULS-TLS PROPERTIES

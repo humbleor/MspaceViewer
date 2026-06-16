@@ -1,4 +1,4 @@
-﻿#include "../include/FormSettings.h"
+#include "../include/FormSettings.h"
 #include <filesystem>
 #include <osg/ShapeDrawable>
 #include <osgViewer/ViewerEventHandlers>
@@ -10,6 +10,7 @@
 #include <osg/AutoTransform>
 #include <osg/Material>
 #include <osg/LineWidth>
+#include <osg/Point>
 #include <osg/MatrixTransform>
 
 
@@ -69,11 +70,10 @@ void FormSettings::loadFiles(std::vector<std::string> inputFiles, std::string ou
         optimizer.optimize(inputFileNode);
 
         _root->addChild(inputFileNode);
+
         osg::BoundingSphere boundingSphere = inputFileNode->getBound();
         osg::ref_ptr<osgGA::TrackballManipulator> manipulator = new osgGA::TrackballManipulator;
-        // 计算相机的位置：节点中心 + 半径在Z轴方向
         osg::Vec3 cameraPosition = boundingSphere.center() + osg::Vec3(0.0, 0.0, boundingSphere.radius());
-        // 设置相机的视图矩阵
         manipulator->setHomePosition(cameraPosition, boundingSphere.center(), osg::Vec3(0.0, 1.0, 0.0));
         _viewer->setCameraManipulator(manipulator);
     }

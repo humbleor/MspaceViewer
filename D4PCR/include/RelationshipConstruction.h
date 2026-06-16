@@ -3,6 +3,7 @@
 
 #include "Preparation.h"
 #include "dll_export.h"
+#include <string>
 
 class DLL_EXPORT RelationshipConstruction
 {
@@ -17,8 +18,7 @@ public:
 	pcl::Correspondences getCorrespondences();
 
 private:
-	void loadPCDFileS(std::string pathS);
-	void loadPCDFileT(std::string pathT);
+	void loadPointCloudFile(std::string path, PointCloudPtr& cloud);
 
 	void getCenter(PointCloudPtr input, Eigen::Vector3d& center);
 	void downSamping(PointCloudPtr input, PointCloudPtr output, float resolution);

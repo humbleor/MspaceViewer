@@ -14,7 +14,7 @@ target_include_directories(osgdb_bin
 )
 
 target_link_libraries(osgdb_bin
-    PUBLIC OpenSceneGraph::osg OpenSceneGraph::osgDB OpenSceneGraph::osgUtil
+    PUBLIC unofficial::osg::osg unofficial::osg::osgDB unofficial::osg::osgUtil
 )
 
 # OSG 插件输出到版本化目录（OSG 默认在此查找插件）

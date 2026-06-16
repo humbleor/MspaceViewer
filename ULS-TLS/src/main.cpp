@@ -1,6 +1,6 @@
 #include <iostream>
-#include "../include/RegistrationU2T.h"
-#include "../include/LoadLasFile.h"
+#include "RegistrationU2T.h"
+#include "LoadLasFile.h"
 
 int main()
 {

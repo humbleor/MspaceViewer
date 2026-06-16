@@ -1,0 +1,25 @@
+{
+  "name": "mspaceviewer",
+  "version": "1.0.0",
+  "description": "MspaceViewer - LiDAR point cloud visualization and registration application",
+  "dependencies": [
+    {
+      "name": "osg",
+      "default-features": false,
+      "features": ["freetype"]
+    },
+    "liblas",
+    {
+      "name": "boost-filesystem",
+      "default-features": false
+    },
+    {
+      "name": "boost-graph",
+      "default-features": false
+    },
+    {
+      "name": "boost-ptr-container",
+      "default-features": false
+    }
+  ]
+}

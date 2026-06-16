@@ -36,12 +36,12 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
         index++;
     }
 
-    //�õ��ļ���
+    //得到文件后缀
     std::string _ext = osgDB::getLowerCaseFileExtension(fileinformation[11]);
-    //�ж��Ƿ�֧�ָ��ļ�
+    //判断是否支持该文件
     if (!acceptsExtension(_ext))
         return ReadResult::FILE_NOT_HANDLED;
-    //����һ���洢���ݵĽڵ�
+    //创建一个存储数据的节点
     osg::ref_ptr<osg::Geode> _geode = new osg::Geode();
 
     osg::ref_ptr<osg::Vec3Array> _coordinates = new osg::Vec3Array();
@@ -86,9 +86,9 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
         }
         else
         {
-            r = 1.0f;
+            r = 0.0f;
             g = 1.0f;
-            b = 1.0f;
+            b = 0.0f;
         }
 
         _colors->push_back(osg::Vec4(r, g, b, 1.0f));
@@ -96,8 +96,6 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
 
     osg::ref_ptr<osg::Geometry> _geometry = new osg::Geometry();
     _geometry->setVertexArray(_coordinates);
-    //_geometry->setColorArray(_colors);
-    //_geometry->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
     _geometry->setColorArray(_colors, osg::Array::BIND_PER_VERTEX);
     _geometry->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, numpoints));
     _geode->addDrawable(_geometry);

@@ -8,12 +8,12 @@
 #include <boost/thread/thread.hpp>
 
 #include <pcl/visualization/cloud_viewer.h>
-#include <iostream>//标准C++库中的输入输出类相关头文件。
+#include <iostream>
 #include <pcl/io/io.h>
-#include <pcl/io/pcd_io.h>//pcd 读写类相关的头文件。
+#include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
-#include <pcl/point_types.h> //PCL中支持的点类型头文件。
-#include <boost/random.hpp>  //高斯噪点测试
+#include <pcl/point_types.h>
+#include <boost/random.hpp>
 #include <fstream>  
 #include <string>  
 #include <vector> 
@@ -198,21 +198,21 @@ int main()
 	//}
 	//datafile.close();
 
-	//	// 创建PCLVisualizer对象
+	//	// 锟斤拷锟斤拷PCLVisualizer锟斤拷锟斤拷
 	//pcl::visualization::PCLVisualizer viewer("Cloud Viewer");
-	//viewer.setBackgroundColor(1.0, 1.0, 1.0); // RGB值为(1,1,1)表示白色
+	//viewer.setBackgroundColor(1.0, 1.0, 1.0); // RGB值为(1,1,1)锟斤拷示锟斤拷色
 
-	//// 将点云添加到可视化器
+	//// 锟斤拷锟斤拷锟斤拷锟斤拷锟接碉拷锟斤拷锟接伙拷锟斤拷
 	//viewer.addPointCloud<pcl::PointXYZ>(sampledCloudS, "sample cloudS");
 
-	//// 设置点云的颜色（可选）
+	//// 锟斤拷锟矫碉拷锟狡碉拷锟斤拷色锟斤拷锟斤拷选锟斤拷
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.67, 0.0, "sample cloudS");
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloudS");
 
-	//// 将点云添加到可视化器
+	//// 锟斤拷锟斤拷锟斤拷锟斤拷锟接碉拷锟斤拷锟接伙拷锟斤拷
 	//viewer.addPointCloud<pcl::PointXYZ>(sampledCloudT, "sample cloudT");
 
-	//// 设置点云的颜色（可选）
+	//// 锟斤拷锟矫碉拷锟狡碉拷锟斤拷色锟斤拷锟斤拷选锟斤拷
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.67, 1.0, "sample cloudT");
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloudT");
 
@@ -230,21 +230,21 @@ int main()
 	//{
 	//	viewer.addLine<pcl::PointXYZ>(sampledCloudS->points[cors[i].index_query], sampledCloudT->points[cors[i].index_match], "line" + std::to_string(i));
 	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "line" + std::to_string(i));
-	//	// 设置直线的透明度
-	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透明度设置为0.5
+	//	// 锟斤拷锟斤拷直锟竭碉拷透锟斤拷锟斤拷
+	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透锟斤拷锟斤拷锟斤拷锟斤拷为0.5
 	//}
 
 	//for (size_t i = number*outliersRatio; i < cors.size(); i += 1)
 	//{
 	//	viewer.addLine<pcl::PointXYZ>(sampledCloudS->points[cors[i].index_query], sampledCloudT->points[cors[i].index_match], "line" + std::to_string(i));
 	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "line" + std::to_string(i));
-	//	// 设置直线的透明度
-	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透明度设置为0.5
+	//	// 锟斤拷锟斤拷直锟竭碉拷透锟斤拷锟斤拷
+	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透锟斤拷锟斤拷锟斤拷锟斤拷为0.5
 	//}
 
 
 
-	//// 主循环，直到窗口被关闭
+	//// 锟斤拷循锟斤拷锟斤拷直锟斤拷锟斤拷锟节憋拷锟截憋拷
 	//while (!viewer.wasStopped())
 	//{
 	//	viewer.spinOnce(100);
