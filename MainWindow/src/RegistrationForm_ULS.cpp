@@ -155,7 +155,7 @@ void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
 
 	std::shared_ptr<RegistrationU2T> u2t = std::make_shared<RegistrationU2T>(uav, tls);
 	u2t->setGridFilterRes(resolution);
-	u2t->gridStep(gridStep);
+	u2t->setGridStep(gridStep);
 	u2t->setSearchRadius(searchRadius);
 	u2t->setRadiusStep(radiusStep);
 	u2t->setNumSectors(numSectors);

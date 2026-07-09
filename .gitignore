@@ -1,6 +1,7 @@
 .vscode/
 build/
 vcpkg_installed/
+test/
 
 .claude/
 .mimocode/

@@ -3,6 +3,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QtWidgets/QProgressBar>
 #include <QtWidgets/QFileDialog>
+#include <QtWidgets/QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -19,10 +20,12 @@ MainWindow::MainWindow(QWidget *parent)
 	connect(ui.action_registration_TLS, &QAction::triggered, this, &MainWindow::registration_TLS);
 	connect(ui.action_registration_Fast, &QAction::triggered, this, &MainWindow::outlierRemovalRegistration);
 	connect(ui.action_registration_Forest, &QAction::triggered, this, &MainWindow::registration_Forest);
+	connect(ui.action_registration_Txt, &QAction::triggered, this, &MainWindow::registration_Position);
     //connect(ui._action_treeEvaluation, &QAction::triggered, this, &MainWindow::treeEvaluation);
     //connect(ui._action_stemCurveEvaluation, &QAction::triggered, this, &MainWindow::stemCurveEvaluation);
     connect(ui._action_Chinese, &QAction::triggered, this, &MainWindow::changeLanguage_Chinese);
     connect(ui._action_English, &QAction::triggered, this, &MainWindow::changeLanguage_English);
+    connect(ui.action_about, &QAction::triggered, this, &MainWindow::showAbout);
 }
 
 MainWindow::~MainWindow()
@@ -72,7 +75,7 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
         std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
         pDlg->setWindowTitle(tr("Notice"));
         pDlg->setModal(true);
-        pDlg->setLabelText("Loading data...");
+        pDlg->setLabelText(tr("Loading data..."));
         pDlg->setWindowFlags(pDlg->windowFlags() & ~Qt::WindowCloseButtonHint & ~Qt::WindowContextHelpButtonHint);
         pDlg->setCancelButton(nullptr);
         pDlg->show();
@@ -103,7 +106,7 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
         // 确认节点确实加载到了场景
         if (!inputFileNode.valid() || inputFileNode->getNumChildren() == 0)
         {
-            ui._Logger->insertPlainText(QStringLiteral("Point cloud not loaded into scene (check plugins/resources)!\n"));
+            ui._Logger->insertPlainText(tr("Point cloud not loaded into scene (check plugins/resources)!") + "\n");
             return;
         }
 
@@ -139,12 +142,12 @@ void MainWindow::HiddenData(QStandardItem* item)
     if (state == Qt::Checked)
     {
         node->setNodeMask(0xFFFFFFFF);
-        ui._Logger->insertPlainText(QStringLiteral("The data \"%1\" has been shown！\n").arg(item->text()));
+        ui._Logger->insertPlainText(tr("The data \"%1\" has been shown!").arg(item->text()) + "\n");
     }
     else
     {
         node->setNodeMask(0);
-        ui._Logger->insertPlainText(QStringLiteral("The data \"%1\" has been hidden！\n").arg(item->text()));
+        ui._Logger->insertPlainText(tr("The data \"%1\" has been hidden!").arg(item->text()) + "\n");
     }
 }
 
@@ -169,14 +172,14 @@ void MainWindow::DeleteData()
     QStandardItem* item = _rootNode->itemFromIndex(currentIndex);
     if (item == nullptr)
     {
-        ui._Logger->insertPlainText(tr("Unable to delete node！") + "\n");
+        ui._Logger->insertPlainText(tr("Unable to delete node!") + "\n");
         return;
     }
 
     auto it = _itemToPointCloud.find(item);
     if (it == _itemToPointCloud.end())
     {
-        ui._Logger->insertPlainText(tr("Unable to delete node ！") + "\n");
+        ui._Logger->insertPlainText(tr("Unable to delete node!") + "\n");
         return;
     }
 
@@ -184,7 +187,7 @@ void MainWindow::DeleteData()
     if (deleteNode.valid())
     {
         _formSettings->deletePointCloudNode(deleteNode, "./tmp/" + deleteNode->getName());
-        ui._Logger->insertPlainText(QStringLiteral("The node \"%1\" has been deleted！\n").arg(deleteNode->getName().c_str()));
+        ui._Logger->insertPlainText(tr("The node \"%1\" has been deleted!").arg(deleteNode->getName().c_str()) + "\n");
     }
 
     _itemToPointCloud.erase(it);
@@ -270,6 +273,21 @@ void MainWindow::registration_Forest()
 	_forestRegistration->executeRegistration(pDlg.get(), ui._Logger);
 }
 
+void MainWindow::registration_Position()
+{
+	std::shared_ptr<PositionRegistration> _positionRegistration = std::make_shared<PositionRegistration>(this);
+    if (!_positionRegistration->exec())
+		return;
+	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
+	pDlg->setWindowTitle(tr("Tips"));
+	pDlg->setModal(true);
+	QProgressBar* pBar = new QProgressBar(pDlg.get());
+	pBar->setRange(0, 0);
+	pBar->setAlignment(Qt::AlignCenter);
+	pDlg->setBar(pBar);
+	_positionRegistration->executeRegistration(pDlg.get(), ui._Logger);
+}
+
 void MainWindow::changeLanguage_Chinese()
 {
     qApp->installTranslator(&chinese);
@@ -282,6 +300,23 @@ void MainWindow::changeLanguage_English()
     qApp->installTranslator(&english);
     ui.retranslateUi(this);
     output_English = true;
+}
+
+void MainWindow::showAbout()
+{
+    QMessageBox about(this);
+    about.setWindowTitle(tr("About MSpaceViewer"));
+    about.setIcon(QMessageBox::Information);
+    about.setText(
+        "<h3>MSpaceViewer</h3>"
+        "<p>" + tr("A point cloud processing and visualization tool for forestry LiDAR data.") + "</p>"
+        "<p>" + tr("Version: 1.0.0") + "</p>"
+        "<p>" + tr("Built with Qt") + " 6 | " + tr("C++ Standard") + " 20</p>"
+        "<p>" + tr("Dependencies") + ": PCL, OpenSceneGraph, OpenCV, libLAS</p>"
+        "<hr>"
+        "<p>© 2025 MSpaceViewer Team</p>"
+    );
+    about.exec();
 }
 
 void MainWindow::updatePropertyPanel(const std::string& fileName, osg::ref_ptr<osg::MSpaceNode> node)

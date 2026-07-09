@@ -675,6 +675,42 @@ void HashRegDescManager::GenTriDescs(const pcl::PointCloud<pcl::PointXYZ>::Ptr &
     discarded_clusters.clear();
 }
 
+// generate triangle descriptor from 2D tree center coordinates
+void HashRegDescManager::GenTriDescsFromCenters(
+    const Eigen::Matrix2Xd &centers,
+    FrameInfo &curr_frame_info)
+{
+    curr_frame_info.currCenter.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
+    curr_frame_info.currCenterFix.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
+    curr_frame_info.currPoints.reset(new pcl::PointCloud<pcl::PointXYZ>);
+
+    int N = centers.cols();
+    for (int i = 0; i < N; i++) {
+        pcl::PointXYZINormal p;
+        p.x = centers(0, i);
+        p.y = centers(1, i);
+        p.z = 0.0;
+        p.normal_x = 0; p.normal_y = 0; p.normal_z = 0;
+        p.intensity = 0;
+        curr_frame_info.currCenter->push_back(p);
+        curr_frame_info.currCenterFix->push_back(p);
+
+        pcl::PointXYZ base;
+        base.x = p.x; base.y = p.y; base.z = p.z;
+        curr_frame_info.currPoints->push_back(base);
+    }
+
+    curr_frame_info.desc_.clear();
+    if (curr_frame_info.currCenter->size() > 0)
+        build_stdesc(curr_frame_info);
+
+    curr_frame_info.frame_id_ = current_frame_id_;
+    current_frame_id_++;
+
+    clusters_vec_.push_back({});
+    discarded_clusters_vec.push_back({});
+}
+
 // add triangle descriptor to data base   const std::vector<TriDesc> &trids_vec
 void HashRegDescManager::AddTriDescs(const FrameInfo &curr_frame_info) {
   // get the tri descriptor  

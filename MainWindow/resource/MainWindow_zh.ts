@@ -4,194 +4,120 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/MainWindow.cpp" line="57"/>
-        <source>删除</source>
+        <source>delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="69"/>
-        <location filename="../src/MainWindow.cpp" line="235"/>
-        <location filename="../src/MainWindow.cpp" line="323"/>
-        <source>提示</source>
+        <source>Notice</source>
         <translation>提示</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="71"/>
-        <source>正在加载数据……</source>
-        <translation>正在加载数据……</translation>
+        <source>Loading data...</source>
+        <translation>正在加载数据...</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="107"/>
-        <source>点云数据读取和显示失败！</source>
+        <source>Point cloud not loaded into scene (check plugins/resources)!</source>
+        <translation>点云未加载到场景中（请检查插件/资源）！</translation>
+    </message>
+    <message>
+        <source>Point cloud data loading and display failed!</source>
         <translation>点云数据读取和显示失败！</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="192"/>
-        <source>无法删除节点！</source>
+        <source>The data &quot;%1&quot; has been shown!</source>
+        <translation>数据 &quot;%1&quot; 已显示！</translation>
+    </message>
+    <message>
+        <source>The data &quot;%1&quot; has been hidden!</source>
+        <translation>数据 &quot;%1&quot; 已隐藏！</translation>
+    </message>
+    <message>
+        <source>Unable to delete node!</source>
         <translation>无法删除节点！</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="203"/>
-        <source>选择LAS文件</source>
-        <translation>选择LAS文件</translation>
+        <source>The node &quot;%1&quot; has been deleted!</source>
+        <translation>节点 &quot;%1&quot; 已删除！</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="206"/>
-        <source>请选择有效的文件！</source>
+        <source>Select Point Cloud File</source>
+        <translation>选择点云文件</translation>
+    </message>
+    <message>
+        <source>Please select a valid file!</source>
         <translation>请选择有效的文件！</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="298"/>
-        <source>树木匹配结果示意图</source>
-        <translation>树木匹配结果示意图</translation>
+        <source>Tips</source>
+        <translation>提示</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="308"/>
-        <source>树木参数预测结果评价：请检查文件格式和输入参数是否正确！</source>
-        <translation>树木参数预测结果评价：请检查文件格式和输入参数是否正确！</translation>
+        <source>About MSpaceViewer</source>
+        <translation>关于 MSpaceViewer</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="333"/>
-        <source>杆曲线预测结果评价：请检查文件格式和输入参数是否正确！</source>
-        <translation>杆曲线预测结果评价：请检查文件格式和输入参数是否正确！</translation>
+        <source>A point cloud processing and visualization tool for forestry LiDAR data.</source>
+        <translation>用于林业LiDAR数据的点云处理与可视化工具。</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="345"/>
-        <source>预测树数据表(图中模型用绿色表示,树木ID为：E_ID)</source>
-        <translation>预测树数据表(图中模型用绿色表示,树木ID为：E_ID)</translation>
+        <source>Version: 1.0.0</source>
+        <translation>版本: 1.0.0</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="486"/>
-        <source>对应的预测树ID</source>
-        <translation>对应的预测树ID</translation>
+        <source>Built with Qt</source>
+        <translation>基于 Qt 构建</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="518"/>
-        <source>未匹配的预测树数据表(图中模型用红色表示,树木ID为：UE_ID)</source>
-        <translation>未匹配的预测树数据表(图中模型用红色表示,树木ID为：UE_ID)</translation>
+        <source>C++ Standard</source>
+        <translation>C++ 标准</translation>
     </message>
     <message>
-        <source>提取树数据表(图中模型用绿色表示,树木ID为：E_ID)</source>
-        <translation type="vanished">提取树数据表(图中模型用绿色表示,树木ID为：E_ID)</translation>
+        <source>Dependencies</source>
+        <translation>依赖库</translation>
     </message>
     <message>
-        <source>未匹配的提取树数据表(图中模型用红色表示,树木ID为：UE_ID)</source>
-        <translation type="vanished">未匹配的提取树数据表(图中模型用红色表示,树木ID为：UE_ID)</translation>
+        <source>Property</source>
+        <translation>属性</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="596"/>
-        <source>未匹配的参考树数据表(图中模型用红色表示,树木ID为：UR_ID)</source>
-        <translation>未匹配的参考树数据表(图中模型用红色表示,树木ID为：UR_ID)</translation>
+        <source>Value</source>
+        <translation>值</translation>
     </message>
     <message>
-        <source>提取树数据表(左侧图中模型用绿色表示,树木ID为：E_ID)</source>
-        <translation type="vanished">提取树数据表(左侧图中模型用绿色表示,树木ID为：E_ID)</translation>
+        <source>File Name</source>
+        <translation>文件名</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="378"/>
-        <location filename="../src/MainWindow.cpp" line="459"/>
-        <location filename="../src/MainWindow.cpp" line="549"/>
-        <location filename="../src/MainWindow.cpp" line="628"/>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>File Format</source>
+        <translation>文件格式</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="381"/>
-        <location filename="../src/MainWindow.cpp" line="385"/>
-        <location filename="../src/MainWindow.cpp" line="389"/>
-        <location filename="../src/MainWindow.cpp" line="462"/>
-        <location filename="../src/MainWindow.cpp" line="466"/>
-        <location filename="../src/MainWindow.cpp" line="470"/>
-        <location filename="../src/MainWindow.cpp" line="552"/>
-        <location filename="../src/MainWindow.cpp" line="556"/>
-        <location filename="../src/MainWindow.cpp" line="560"/>
-        <location filename="../src/MainWindow.cpp" line="631"/>
-        <location filename="../src/MainWindow.cpp" line="635"/>
-        <location filename="../src/MainWindow.cpp" line="639"/>
-        <source>X</source>
-        <translation>X</translation>
+        <source>Center X</source>
+        <translation>中心 X</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="381"/>
-        <location filename="../src/MainWindow.cpp" line="385"/>
-        <location filename="../src/MainWindow.cpp" line="462"/>
-        <location filename="../src/MainWindow.cpp" line="466"/>
-        <location filename="../src/MainWindow.cpp" line="552"/>
-        <location filename="../src/MainWindow.cpp" line="556"/>
-        <location filename="../src/MainWindow.cpp" line="631"/>
-        <location filename="../src/MainWindow.cpp" line="635"/>
-        <source>Y</source>
-        <translation>Y</translation>
+        <source>Center Y</source>
+        <translation>中心 Y</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="381"/>
-        <location filename="../src/MainWindow.cpp" line="462"/>
-        <location filename="../src/MainWindow.cpp" line="552"/>
-        <location filename="../src/MainWindow.cpp" line="631"/>
-        <source>Z</source>
-        <translation>Z</translation>
+        <source>Center Z</source>
+        <translation>中心 Z</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="405"/>
-        <source>对应的参考树ID</source>
-        <translation>对应的参考树ID</translation>
+        <source>Bounding Radius</source>
+        <translation>包围球半径</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="427"/>
-        <source>参考树数据表(图中模型用黄色表示,树木ID为：R_ID)</source>
-        <translation>参考树数据表(图中模型用黄色表示,树木ID为：R_ID)</translation>
-    </message>
-    <message>
-        <source>对应的提取树ID</source>
-        <translation type="vanished">对应的提取树ID</translation>
-    </message>
-    <message>
-        <source>树高</source>
-        <translation type="vanished">树高</translation>
-    </message>
-    <message>
-        <source>胸径</source>
-        <translation type="vanished">胸径</translation>
-    </message>
-    <message>
-        <source>匹配特征</source>
-        <translation type="vanished">匹配特征</translation>
-    </message>
-    <message>
-        <source>匹配的参考树ID</source>
-        <translation type="vanished">匹配的参考树ID</translation>
-    </message>
-    <message>
-        <source>参考树数据表(左侧图中模型用黄色表示,树木ID为：R_ID)</source>
-        <translation type="vanished">参考树数据表(左侧图中模型用黄色表示,树木ID为：R_ID)</translation>
-    </message>
-    <message>
-        <source>匹配的提取树ID</source>
-        <translation type="vanished">匹配的提取树ID</translation>
-    </message>
-    <message>
-        <source>未匹配的提取树和参考树数据表(左侧图中模型用红色表示,树木ID为：UE_ID和UR_ID)</source>
-        <translation type="vanished">未匹配的提取树和参考树数据表(左侧图中模型用红色表示,树木ID为：UE_ID和UR_ID)</translation>
-    </message>
-    <message>
-        <source>未匹配的提取树数据</source>
-        <translation type="vanished">未匹配的提取树数据</translation>
-    </message>
-    <message>
-        <source>未匹配的参考树数据</source>
-        <translation type="vanished">未匹配的参考树数据</translation>
+        <source>Children Count</source>
+        <translation>子节点数</translation>
     </message>
 </context>
 <context>
     <name>MainWindowClass</name>
     <message>
-        <source>MSpaceViewer</source>
-        <translation type="vanished">MSpaceViewer</translation>
-    </message>
-    <message>
         <location filename="MainWindow.ui" line="14"/>
-        <source>Parameter Evaluation</source>
-        <translation>Parameter Evaluation</translation>
+        <source>近距离LiDAR单 木与样地AGB精准测算分系统</source>
+        <translation>近距离LiDAR单木与样地AGB精准测算分系统</translation>
     </message>
     <message>
         <location filename="MainWindow.ui" line="38"/>
@@ -201,7 +127,6 @@
     <message>
         <location filename="MainWindow.ui" line="44"/>
         <source>特征评价</source>
-        <oldsource>结果评价</oldsource>
         <translation>特征评价</translation>
     </message>
     <message>
@@ -210,14 +135,19 @@
         <translation>语言</translation>
     </message>
     <message>
+        <location filename="MainWindow.ui" line="56"/>
+        <source>点云处理</source>
+        <translation>点云处理</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="60"/>
+        <source>点云配准</source>
+        <translation>点云配准</translation>
+    </message>
+    <message>
         <location filename="MainWindow.ui" line="79"/>
         <source>输出窗口</source>
         <translation>输出窗口</translation>
-    </message>
-    <message>
-        <location filename="MainWindow.ui" line="100"/>
-        <source>toolBar</source>
-        <translation>toolBar</translation>
     </message>
     <message>
         <location filename="MainWindow.ui" line="119"/>
@@ -242,12 +172,7 @@
     <message>
         <location filename="MainWindow.ui" line="194"/>
         <source>干曲线预测结果评价</source>
-        <oldsource>杆曲线预测结果评价</oldsource>
         <translation>干曲线预测结果评价</translation>
-    </message>
-    <message>
-        <source>树木提取参数评价</source>
-        <translation type="vanished">树木提取参数评价</translation>
     </message>
     <message>
         <location filename="MainWindow.ui" line="184"/>
@@ -259,299 +184,141 @@
         <source>English</source>
         <translation>English</translation>
     </message>
+    <message>
+        <location filename="MainWindow.ui" line="216"/>
+        <source>地面点云配准</source>
+        <translation>地面点云配准</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="220"/>
+        <source>空地点云配准</source>
+        <translation>空地点云配准</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="224"/>
+        <source>森林点云配准</source>
+        <translation>森林点云配准</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="230"/>
+        <source>离群值剔除配准</source>
+        <translation>离群值剔除配准</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="231"/>
+        <source>位置配准</source>
+        <translation>位置配准</translation>
+    </message>
+    <message>
+        <location filename="MainWindow.ui" line="51"/>
+        <source>关于</source>
+        <translation>关于</translation>
+    </message>
 </context>
 <context>
     <name>StemCurveEvaluation</name>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="20"/>
         <source>树木干曲线预测结果评价</source>
-        <oldsource>干曲线评价</oldsource>
         <translation>树木干曲线预测结果评价</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="26"/>
         <source>文件输入</source>
-        <oldsource>文件输入/输出</oldsource>
         <translation>文件输入</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="34"/>
         <source>预  测  文  件：</source>
-        <oldsource>提  取  文  件：</oldsource>
         <translation>预  测  文  件：</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="44"/>
-        <location filename="StemCurveEvaluation.ui" line="65"/>
-        <location filename="StemCurveEvaluation.ui" line="86"/>
-        <location filename="StemCurveEvaluation.ui" line="170"/>
         <source>选择文件</source>
-        <oldsource>选择提取文件</oldsource>
         <translation>选择文件</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="55"/>
         <source>参  考  文  件：</source>
-        <oldsource>参 考 树 文 件：</oldsource>
         <translation>参  考  文  件：</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="152"/>
         <source>文件输出</source>
         <translation>文件输出</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="160"/>
         <source>评价结果文件：</source>
         <translation>评价结果文件：</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="76"/>
         <source>匹配关系文件：</source>
-        <oldsource>评价结果输出路径：</oldsource>
         <translation>匹配关系文件：</translation>
     </message>
     <message>
-        <location filename="../src/StemCurveEvaluation.cpp" line="89"/>
-        <source>选择输出文件</source>
-        <translation>选择输出文件</translation>
-    </message>
-    <message>
-        <source>ID匹配关系文件：</source>
-        <translation type="vanished">ID匹配关系文件：</translation>
-    </message>
-    <message>
-        <source>选择匹配文件</source>
-        <translation type="vanished">选择匹配文件</translation>
-    </message>
-    <message>
-        <location filename="StemCurveEvaluation.ui" line="98"/>
         <source>匹配关系参数设置</source>
         <translation>匹配关系参数设置</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="108"/>
         <source>胸径和坐标的提取高度(m)：</source>
         <translation>胸径和坐标的提取高度(m)：</translation>
     </message>
     <message>
-        <location filename="StemCurveEvaluation.ui" line="135"/>
         <source>匹配搜索半径(m):</source>
         <translation>匹配搜索半径(m):</translation>
     </message>
     <message>
-        <source>是否使用已有的匹配关系</source>
-        <translation type="vanished">是否使用已有的匹配关系</translation>
-    </message>
-    <message>
-        <location filename="StemCurveEvaluation.ui" line="197"/>
         <source>完成</source>
         <translation>完成</translation>
-    </message>
-    <message>
-        <location filename="../src/StemCurveEvaluation.cpp" line="38"/>
-        <source>提取树结果评价……</source>
-        <translation>提取树结果评价……</translation>
-    </message>
-    <message>
-        <location filename="../src/StemCurveEvaluation.cpp" line="59"/>
-        <source>选择提取树参数文件</source>
-        <translation>选择提取树参数文件</translation>
-    </message>
-    <message>
-        <location filename="../src/StemCurveEvaluation.cpp" line="69"/>
-        <source>选择参考树参数文件</source>
-        <translation>选择参考树参数文件</translation>
-    </message>
-    <message>
-        <location filename="../src/StemCurveEvaluation.cpp" line="79"/>
-        <source>选择匹配索引文件</source>
-        <translation>选择匹配索引文件</translation>
     </message>
 </context>
 <context>
     <name>TreeEvaluation</name>
     <message>
-        <location filename="TreeEvaluation.ui" line="14"/>
         <source>树木基本参数预测结果评价</source>
-        <oldsource>树木基本特征预测结果评价</oldsource>
         <translation>树木基本参数预测结果评价</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="20"/>
         <source>文件输入</source>
-        <oldsource>文件输入/输出</oldsource>
         <translation>文件输入</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="30"/>
         <source>预  测  文  件：</source>
-        <oldsource>提  取  文  件：</oldsource>
         <translation>预  测  文  件：</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="40"/>
-        <location filename="TreeEvaluation.ui" line="61"/>
-        <location filename="TreeEvaluation.ui" line="82"/>
-        <location filename="TreeEvaluation.ui" line="168"/>
         <source>选择文件</source>
-        <oldsource>选择提取文件</oldsource>
         <translation>选择文件</translation>
     </message>
     <message>
-        <source>匹配特征所在列号</source>
-        <translation type="vanished">匹配特征所在列号</translation>
+        <source>参  考  文  件：</source>
+        <translation>参  考  文  件：</translation>
     </message>
     <message>
-        <source>提取树列号：</source>
-        <translation type="vanished">提取树列号：</translation>
+        <source>匹配关系文件：</source>
+        <translation>匹配关系文件：</translation>
     </message>
     <message>
-        <source>参考树列号：</source>
-        <translation type="vanished">参考树列号：</translation>
-    </message>
-    <message>
-        <location filename="../src/TrreeEvaluation.cpp" line="98"/>
-        <source>选择输出文件</source>
-        <translation>选择输出文件</translation>
-    </message>
-    <message>
-        <source>ID匹配关系文件：</source>
-        <translation type="vanished">ID匹配关系文件：</translation>
-    </message>
-    <message>
-        <source>选择匹配文件</source>
-        <translation type="vanished">选择匹配文件</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="96"/>
         <source>匹配关系参数设置</source>
         <translation>匹配关系参数设置</translation>
     </message>
     <message>
-        <source>坐标维度</source>
-        <translation type="vanished">坐标维度</translation>
-    </message>
-    <message>
-        <source>1</source>
-        <translation type="vanished">1</translation>
-    </message>
-    <message>
-        <source>提取树匹配特征所在列号(0代表没有匹配特征)：</source>
-        <oldsource>匹配特征所在列(0代表没有匹配特征)：</oldsource>
-        <translation type="vanished">提取树匹配特征所在列号(0代表没有匹配特征)：</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="51"/>
-        <source>参  考  文  件：</source>
-        <oldsource>参 考 树 文 件：</oldsource>
-        <translation>参  考  文  件：</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="72"/>
-        <source>匹配关系文件：</source>
-        <oldsource>匹配关系文件 ：</oldsource>
-        <translation>匹配关系文件 ：</translation>
-    </message>
-    <message>
-        <source>选择路径</source>
-        <translation type="vanished">选择路径</translation>
-    </message>
-    <message>
-        <source>提取树坐标维度：</source>
-        <oldsource>坐标维度：</oldsource>
-        <translation type="vanished">提取树坐标维度：</translation>
-    </message>
-    <message>
-        <source>3</source>
-        <translation type="vanished">3</translation>
-    </message>
-    <message>
-        <source>2</source>
-        <translation type="vanished">2</translation>
-    </message>
-    <message>
-        <source>是否有匹配特征(一维)：</source>
-        <translation type="vanished">是否有匹配特征(一维)：</translation>
-    </message>
-    <message>
-        <source>是</source>
-        <translation type="vanished">是</translation>
-    </message>
-    <message>
-        <source>否</source>
-        <translation type="vanished">否</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="133"/>
         <source>匹配搜索半径(m)：</source>
         <translation>匹配搜索半径(m)：</translation>
     </message>
     <message>
-        <source>是否使用已有的匹配关系</source>
-        <translation type="vanished">是否使用已有的匹配关系</translation>
-    </message>
-    <message>
-        <source>参考树坐标维度：</source>
-        <translation type="vanished">参考树坐标维度：</translation>
-    </message>
-    <message>
-        <source>参考树匹配特征所在列号(0代表没有匹配特征)：</source>
-        <translation type="vanished">参考树匹配特征所在列号(0代表没有匹配特征)：</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="182"/>
         <source>是否显示匹配结果</source>
         <translation>是否显示匹配结果</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="150"/>
         <source>文件输出</source>
         <translation>文件输出</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="106"/>
         <source>匹配特征列号：</source>
-        <oldsource>提取文件匹配特征列号：</oldsource>
         <translation>匹配特征列号：</translation>
     </message>
     <message>
-        <source>参考文件匹配特征列号：</source>
-        <translation type="vanished">参考文件匹配特征列号：</translation>
-    </message>
-    <message>
-        <location filename="TreeEvaluation.ui" line="158"/>
         <source>评价结果文件 ：</source>
         <translation>评价结果文件 ：</translation>
     </message>
     <message>
-        <location filename="TreeEvaluation.ui" line="202"/>
         <source>完成</source>
         <translation>完成</translation>
-    </message>
-    <message>
-        <location filename="../src/TrreeEvaluation.cpp" line="42"/>
-        <source>提取树结果评价……</source>
-        <translation>提取树结果评价……</translation>
-    </message>
-    <message>
-        <location filename="../src/TrreeEvaluation.cpp" line="68"/>
-        <source>选择提取树参数文件</source>
-        <translation>选择提取树参数文件</translation>
-    </message>
-    <message>
-        <location filename="../src/TrreeEvaluation.cpp" line="78"/>
-        <source>选择参考树参数文件</source>
-        <translation>选择参考树参数文件</translation>
-    </message>
-    <message>
-        <location filename="../src/TrreeEvaluation.cpp" line="88"/>
-        <source>选择匹配索引文件</source>
-        <translation>选择匹配索引文件</translation>
-    </message>
-    <message>
-        <source>选择输出路径</source>
-        <translation type="vanished">选择输出路径</translation>
     </message>
 </context>
 </TS>

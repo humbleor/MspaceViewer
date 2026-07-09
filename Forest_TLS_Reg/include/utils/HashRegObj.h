@@ -135,10 +135,14 @@ public:
 public:
 
     // generate triangle descriptor
-    void GenTriDescs(const pcl::PointCloud<pcl::PointXYZ>::Ptr &input_cloud, 
+    void GenTriDescs(const pcl::PointCloud<pcl::PointXYZ>::Ptr &input_cloud,
                                     FrameInfo &curr_frame_info);
 
-    // const std::vector<TriDesc> &stds_vec 
+    // generate triangle descriptor from 2D tree center coordinates
+    void GenTriDescsFromCenters(const Eigen::Matrix2Xd &centers,
+                                FrameInfo &curr_frame_info);
+
+    // const std::vector<TriDesc> &stds_vec
     void AddTriDescs(const FrameInfo &curr_frame_info);
 
     // search the loop for current fram, "stds_vec"

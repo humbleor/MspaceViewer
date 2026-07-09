@@ -11,6 +11,7 @@
 #include "OutlierRemovalRegistration.h"
 #include "RegistrationForm_TLS.h"
 #include "ForestRegistration.h"
+#include "PositionRegistration.h"
 //#include "TreeEvaluation.h"
 //#include "StemCurveEvaluation.h"
 //#include "../../TreeEvaluation/include/3DMatching.h"
@@ -47,12 +48,16 @@ private:
 	void registration_TLS();
     //森林点云配准
     void registration_Forest();
+    //位置配准
+    void registration_Position();
     //更新属性面板
     void updatePropertyPanel(const std::string& fileName, osg::ref_ptr<osg::MSpaceNode> node);
     //转化到中文
     void changeLanguage_Chinese();
     //转化到英文
     void changeLanguage_English();
+    //关于
+    void showAbout();
 
     ////树木提取参数评价
     //void treeEvaluation();

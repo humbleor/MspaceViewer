@@ -4,14 +4,14 @@
 
 int main()
 {
-	float resolution = 0.2f;// GridMinimum体素格的边长
-	float setp = 0.5f;// ULS keypnt提取格网边长
-	float radius = 5.0f;//邻域半径
-	float rSetp = 0.5f;//径向距离 间隔
-	int numsSectors = 360;//0-360的极坐标范围 分为360份
-	float angleThe = 2.0;//角度差
-	float a2DThe = 0.1;//维度特征2d 差
-	float a3DThe = 0.1;//维度特征3d 差
+	float resolution = 0.2f; // GridMinimum体素格的边长
+	float setp = 0.5f;		 // ULS keypnt提取格网边长
+	float radius = 5.0f;	 // 邻域半径
+	float rSetp = 0.5f;		 // 径向距离 间隔
+	int numsSectors = 360;	 // 0-360的极坐标范围 分为360份
+	float angleThe = 2.0f;	 // 角度差
+	float a2DThe = 0.1f;     // 维度特征2d 差
+	float a3DThe = 0.1;		 // 维度特征3d 差
 
 	PointCloud3fPtr source = std::make_shared<PointCloud3f>();
 	PointCloud3fPtr target = std::make_shared<PointCloud3f>();

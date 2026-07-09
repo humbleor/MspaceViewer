@@ -12,7 +12,8 @@ MspaceViewer 是一款面向激光扫描（LiDAR）点云数据的桌面应用�
 - **TLS-TLS 配准**：基于菱形描述子与 FPFH 特征匹配的地面激光扫描点云配准
 - **ULS-TLS 配准**：基于 PCA 描述子与极坐标离散化的无人机到地面点云粗配准
 - **D4PCR 离群值鲁棒配准**：使用区间 stabbing 算法实现高离群值比例下的 4DOF 配准
-- **Forest TLS Registration**：基于 small_gicp + GTSAM 的森林场景点云配准
+- **Forest TLS Registration**：基于三角形描述符哈希表的森林场景点云配准
+- **位置配准（Position Registration）**：基于已有树干中心坐标，使用三角形描述符哈希匹配 + ICP 精配准的二维位置配准，支持 TXT/CSV/XLSX 格式输入
 - **多语言支持**：内置中文/英文界面切换
 
 ## 项目架构
@@ -54,7 +55,8 @@ MspaceViewer/
 │   │   ├── RegistrationForm_TLS.cpp
 │   │   ├── RegistrationForm_ULS.cpp
 │   │   ├── OutlierRemovalRegistration.cpp
-│   │   └── ForestRegistration.cpp
+│   │   ├── ForestRegistration.cpp
+│   │   └── PositionRegistration.cpp
 │   ├── include/
 │   └── resource/               # UI 文件、资源文件
 ├── MspaceOctree/               # 基于八叉树的点云数据结构
@@ -82,7 +84,8 @@ MspaceViewer/
 | **TLSRegistration** | TLS-TLS 配准算法：菱形描述子提取、FPFH 特征匹配 |
 | **ULS-TLS** | `RegistrationU2T` 类：GridMinimum 滤波、PCA 描述子筛选、Z 值极坐标离散化估计旋转角 |
 | **D4PCR** | `Decoupling` 类：区间 stabbing 算法，针对高离群值比例的鲁棒 4DOF 配准 |
-| **Forest_TLS_Reg** | 基于 small_gicp + GTSAM 的森林场景点云配准，含 CSF 地面滤波 |
+| **Forest_TLS_Reg** | 基于三角形描述符哈希表的森林场景点云配准（small_gicp + GTSAM），含 CSF 地面滤波；`GenTriDescsFromCenters` 支持从 2D 坐标直接生成描述符 |
+| **PositionRegistration** | 位置配准：从 TXT/CSV/XLSX 文件解析树干中心坐标，基于三角形描述符哈希匹配 + ICP 精配准，输出 4×4 变换矩阵 |
 
 ## 环境依赖与安装
 
@@ -159,12 +162,6 @@ cd vcpkg
 
 ```bash
 cd D:/MspaceViewer
-
-# 方式一：使用 vcpkg manifest 模式（推荐，会在 cmake configure 时自动安装）
-# 无需手动操作，运行 cmake 时会自动根据 vcpkg.json 安装依赖
-
-# 方式二：手动安装
-vcpkg install --triplet x64-windows-release
 ```
 
 vcpkg 会自动安装以下依赖（见 `vcpkg.json`）：
@@ -182,9 +179,7 @@ vcpkg 会自动安装以下依赖（见 `vcpkg.json`）：
 cd E:/Code/MspaceViewer
 
 # 配置 CMake（使用 vcpkg toolchain）
-cmake -B build -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake `
-  -DVCPKG_TARGET_TRIPLET=x64-windows-release
+cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release
 
 # 编译 Release 版本
 cmake --build build --config Release
@@ -288,6 +283,20 @@ build/bin/Release/MspaceViewer.exe
 1. 打开森林配准对话框（`ForestRegistration`）
 2. 加载森林场景点云
 3. 执行配准（基于 small_gicp + GTSAM）
+
+#### 位置配准（Position Registration）
+
+1. 打开位置配准对话框（`PositionRegistration`）
+2. 选择源文件和目标文件（TXT/CSV/XLSX，每行格式：`id X Y`）
+3. 设置参数（三角形边长、K 近邻数、几何验证距离、匹配阈值），或直接使用默认值
+4. 选择输出路径，点击「完成」执行配准
+5. 算法流程：
+   - 解析文件提取树干中心坐标
+   - 对目标数据构建三角形描述符并存入哈希表
+   - 对源数据构建描述符，在哈希表中搜索匹配三角形对
+   - SVD 求解位姿 + 交叉投票验证
+   - ICP 精配准微调
+   - 输出 4×4 变换矩阵文件
 
 ## 快速开始（一行命令）
 

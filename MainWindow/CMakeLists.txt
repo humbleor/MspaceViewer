@@ -10,6 +10,7 @@ set(UI_FILES
     resource/TLS-ULSRegistration.ui
     resource/OutlierRemovalRegistration.ui
     resource/ForestRegistration.ui
+    resource/PositionRegistration.ui
 )
 
 # ── Forest_TLS_Reg 核心源文件（直接编译进 MainWindow）──
@@ -38,8 +39,9 @@ set(MAIN_SOURCES
     src/RegistrationForm_TLS.cpp
     src/OutlierRemovalRegistration.cpp
     src/ForestRegistration.cpp
+    src/PositionRegistration.cpp
     ${FOREST_REG_SOURCES}
-    # src/TrreeEvaluation.cpp  # Incomplete - depends on missing TreeEvaluation module
+    # src/TreeEvaluation.cpp  # Incomplete - depends on missing TreeEvaluation module
     # src/StemCurveEvaluation.cpp
 )
 
@@ -50,6 +52,7 @@ set(MAIN_HEADERS
     include/RegistrationForm_TLS.h
     include/OutlierRemovalRegistration.h
     include/ForestRegistration.h
+    include/PositionRegistration.h
     # include/StemCurveEvaluation.h
     # include/TreeEvaluation.h
 )
@@ -71,6 +74,8 @@ target_include_directories(MspaceViewer
     # libLAS & OpenCV (found by root CMakeLists.txt)
     PRIVATE ${libLAS_INCLUDE_DIR}
     PRIVATE ${OpenCV_INCLUDE_DIRS}
+    # zlib (transitive, for xlsx parser)
+    PRIVATE ${ZLIB_INCLUDE_DIR}
 )
 
 target_link_libraries(MspaceViewer
@@ -102,6 +107,8 @@ target_link_libraries(MspaceViewer
         ${libLAS_LIBRARY}
         ${libLAS_C_LIBRARY}
         Boost::regex Boost::serialization
+        # zlib (for xlsx parser)
+        ${ZLIB_LIBRARY_RELEASE}
         # small_gicp (header-only, embedded)
         small_gicp
         # OpenMP
@@ -111,6 +118,58 @@ target_link_libraries(MspaceViewer
 set_target_properties(MspaceViewer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/resource"
+)
+
+# ── Position Registration Test ──
+add_executable(test_position_reg
+    ${CMAKE_SOURCE_DIR}/test/test_position_reg.cpp
+    ${FOREST_REG_SOURCES}
+)
+
+target_include_directories(test_position_reg
+    PRIVATE ${CMAKE_SOURCE_DIR}
+    PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include
+    PRIVATE ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src
+    PRIVATE ${ZLIB_INCLUDE_DIR}
+    PRIVATE ${OpenCV_INCLUDE_DIRS}
+    PRIVATE ${libLAS_INCLUDE_DIR}
+    PRIVATE ${PCL_INCLUDE_DIRS}
+    PRIVATE ${FLANN_INCLUDE_DIR}
+)
+
+target_link_libraries(test_position_reg
+    PRIVATE
+        pcl_common pcl_io pcl_filters pcl_registration pcl_search pcl_kdtree
+        Eigen3::Eigen
+        opencv_world
+        ${ZLIB_LIBRARY_RELEASE}
+        ${libLAS_LIBRARY}
+        ${libLAS_C_LIBRARY}
+        Boost::regex Boost::serialization
+        small_gicp
+        OpenMP::OpenMP_CXX
+)
+
+# ── Simple Parse Test ──
+add_executable(test_parse_only
+    ${CMAKE_SOURCE_DIR}/test/test_parse_only.cpp
+)
+target_include_directories(test_parse_only
+    PRIVATE ${ZLIB_INCLUDE_DIR}
+    PRIVATE ${PCL_INCLUDE_DIRS}
+    PRIVATE ${FLANN_INCLUDE_DIR}
+)
+target_link_libraries(test_parse_only
+    PRIVATE ${ZLIB_LIBRARY_RELEASE}
+    PRIVATE Eigen3::Eigen
+    PRIVATE pcl_common
+)
+set_target_properties(test_parse_only PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+set_target_properties(test_position_reg PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ── 运行时拷贝翻译文件和 OSG 插件 ──

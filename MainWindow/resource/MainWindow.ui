@@ -47,10 +47,11 @@
     <addaction name="_action_English"/>
    </widget>
    <widget class="QMenu" name="menu_about">
-    <property name="title">
-     <string>关于</string>
-    </property>
-   </widget>
+     <property name="title">
+      <string>关于</string>
+     </property>
+     <addaction name="action_about"/>
+    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
      <string>点云处理</string>
@@ -63,6 +64,7 @@
      <addaction name="action_registration_ULS"/>
      <addaction name="action_registration_Fast"/>
      <addaction name="action_registration_Forest"/>
+     <addaction name="action_registration_Txt"/>
     </widget>
     <addaction name="menu_registration"/>
    </widget>
@@ -226,11 +228,21 @@
     <string>森林点云配准</string>
    </property>
   </action>
-  <action name="action_registration_Fast">
+  <action name="action_registration_Txt">
    <property name="text">
-    <string>离群值剔除配准</string>
+    <string>位置配准</string>
    </property>
   </action>
+   <action name="action_registration_Fast">
+    <property name="text">
+     <string>离群值剔除配准</string>
+    </property>
+   </action>
+   <action name="action_about">
+    <property name="text">
+     <string>关于 MSpaceViewer</string>
+    </property>
+   </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources>

@@ -119,7 +119,6 @@ void StemCurveEvaluation::processingData(std::shared_ptr<Matching3D>& _matching3
 	else
 	{
 		_matching3D->setDimensionOfExt(2);
-		_matching3D->setDimensionOfExt(2);
 		_matching3D->setColumnOfMF(0);
 		_matching3D->setDimensionOfRef(2);
 		_matching3D->setRadius(radius);
