@@ -28,6 +28,42 @@ set(QT_LIB_PREFIX "Qt6")  # backward compatibility for sub-projects
 # ═══════════════════════════════════════════════════
 find_package(PCL 1.14 REQUIRED COMPONENTS common io filters features registration search kdtree)
 
+# Create IMPORTED targets for PCL so TARGET_RUNTIME_DLLS can resolve DLLs
+# PCLConfig.cmake sets PCL_INCLUDE_DIRS and PCL_LIBRARIES but not proper imported targets
+foreach(_pcl_comp common io filters features registration search kdtree octree sample_consensus segmentation visualization ml)
+    if(NOT TARGET PCL::${_pcl_comp})
+        string(TOUPPER ${_pcl_comp} _pcl_comp_upper)
+        find_library(_pcl_${_pcl_comp}_lib
+            NAMES pcl_${_pcl_comp}
+            PATHS "${PCL_ROOT}/lib"
+            NO_DEFAULT_PATH
+        )
+        find_library(_pcl_${_pcl_comp}_debug_lib
+            NAMES pcl_${_pcl_comp}d
+            PATHS "${PCL_ROOT}/lib"
+            NO_DEFAULT_PATH
+        )
+        if(_pcl_${_pcl_comp}_lib)
+            # IMPORTED_LOCATION must point to the DLL, IMPORTED_IMPLIB to the .lib
+            set(_pcl_${_pcl_comp}_dll "${PCL_ROOT}/bin/pcl_${_pcl_comp}.dll")
+            set(_pcl_${_pcl_comp}_debug_dll "${PCL_ROOT}/bin/pcl_${_pcl_comp}d.dll")
+            add_library(PCL::${_pcl_comp} SHARED IMPORTED)
+            set_target_properties(PCL::${_pcl_comp} PROPERTIES
+                IMPORTED_LOCATION "${_pcl_${_pcl_comp}_dll}"
+                IMPORTED_IMPLIB "${_pcl_${_pcl_comp}_lib}"
+                INTERFACE_INCLUDE_DIRECTORIES "${PCL_INCLUDE_DIRS}"
+            )
+            if(EXISTS "${_pcl_${_pcl_comp}_debug_dll}")
+                set_target_properties(PCL::${_pcl_comp} PROPERTIES
+                    IMPORTED_LOCATION_DEBUG "${_pcl_${_pcl_comp}_debug_dll}"
+                    IMPORTED_IMPLIB_DEBUG "${_pcl_${_pcl_comp}_debug_lib}"
+                )
+            endif()
+            message(STATUS "PCL::${_pcl_comp} -> ${_pcl_${_pcl_comp}_dll}")
+        endif()
+    endif()
+endforeach()
+
 # ═══════════════════════════════════════════════════
 # Eigen3 (use PCL's bundled copy)
 # PCLConfig.cmake already sets Eigen3_DIR & calls find_package(Eigen3)

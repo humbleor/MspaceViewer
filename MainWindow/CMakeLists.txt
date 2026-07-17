@@ -99,8 +99,8 @@ target_link_libraries(MspaceViewer
         ULS-TLS
         D4PCR
         TLSRegistration
-        # PCL（OutlierRemovalRegistration 直接使用 PCL）
-        pcl_common pcl_io pcl_filters pcl_features pcl_registration pcl_search pcl_kdtree
+        # PCL — use imported targets so TARGET_RUNTIME_DLLS can resolve DLLs
+        PCL::common PCL::io PCL::filters PCL::features PCL::registration PCL::search PCL::kdtree
         Eigen3::Eigen
         # Forest_TLS_Reg dependencies
         opencv_world
@@ -137,6 +137,24 @@ add_custom_command(TARGET MspaceViewer POST_BUILD
         "$<TARGET_FILE_DIR:MspaceViewer>"
     COMMAND_EXPAND_LISTS
     COMMENT "Copying runtime DLL dependencies..."
+)
+
+# ── 拷贝 PCL 间接依赖 DLL（未通过链接链传递的）──
+set(_PCL_MISSING_DLLS
+    "${PCL_ROOT}/bin/pcl_segmentation.dll"
+    "${PCL_ROOT}/bin/pcl_io_ply.dll"
+    "${PCL_ROOT}/bin/pcl_octree.dll"
+    "${PCL_ROOT}/bin/pcl_sample_consensus.dll"
+    "${PCL_ROOT}/bin/pcl_ml.dll"
+    "C:/Program Files/OpenNI2/Redist/OpenNI2.dll"
+)
+list(FILTER _PCL_MISSING_DLLS EXCLUDE REGEX "^$")
+add_custom_command(TARGET MspaceViewer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${_PCL_MISSING_DLLS}
+        "$<TARGET_FILE_DIR:MspaceViewer>"
+    COMMAND_EXPAND_LISTS
+    COMMENT "Copying PCL indirect dependency DLLs (segmentation, io_ply, OpenNI2)..."
 )
 
 # ── 拷贝 Qt platform 插件 ──
