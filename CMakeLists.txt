@@ -188,3 +188,95 @@ add_subdirectory(TLSRegistration)
 add_subdirectory(ULS-TLS)
 add_subdirectory(D4PCR)
 add_subdirectory(MainWindow)
+
+# ═══════════════════════════════════════════════════
+# CMake Install + CPack
+# ═══════════════════════════════════════════════════
+include(GNUInstallDirs)
+
+set(INSTALL_PREFIX "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_INSTALL_PREFIX "${INSTALL_PREFIX}" CACHE PATH "Install prefix" FORCE)
+
+# ── Project DLLs (internal targets) ──
+install(TARGETS MspaceViewer MspaceOctree laszip osgQt osgdb_bin D4PCR ULS-TLS TLSRegistration
+    RUNTIME DESTINATION .)
+
+# ── Resource directories ──
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/MainWindow/resource"
+    DESTINATION .
+    FILES_MATCHING PATTERN "*.qm" PATTERN "*.ts" PATTERN "*.ui" PATTERN "*.qrc"
+    PATTERN "*.ico" PATTERN "*.png" PATTERN "*.jpg")
+
+# OSG plugins directory
+install(DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release/osgPlugins-3.6.5"
+    DESTINATION .
+    USE_SOURCE_PERMISSIONS)
+
+# ── Qt6 DLLs (only modules actually linked) ──
+get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION)
+cmake_path(GET _qt_core_loc PARENT_PATH _qt_bin_dir)
+set(_QT6_NEEDED Core Gui Widgets Concurrent OpenGL OpenGLWidgets)
+set(_QT6_DLLS)
+foreach(_mod ${_QT6_NEEDED})
+    file(GLOB _mod_dll "${_qt_bin_dir}/Qt6${_mod}*.dll")
+    list(FILTER _mod_dll EXCLUDE REGEX "d\\.dll$")
+    list(APPEND _QT6_DLLS ${_mod_dll})
+endforeach()
+install(FILES ${_QT6_DLLS} DESTINATION .)
+
+# ── Qt platform plugins ──
+install(DIRECTORY "${_qt_bin_dir}/../plugins/platforms"
+    DESTINATION .
+    FILES_MATCHING PATTERN "*.dll"
+    PATTERN "*d.dll" EXCLUDE)
+
+# ── Third-party DLLs ──
+# vcpkg installed directory (OSG, libLAS, Boost, freetype, etc)
+set(VCPKG_BIN_DIR "${CMAKE_SOURCE_DIR}/build/vcpkg_installed/x64-windows-release/bin")
+file(GLOB _VCPKG_DLLS "${VCPKG_BIN_DIR}/*.dll")
+list(FILTER _VCPKG_DLLS EXCLUDE REGEX "_d\\.dll$")
+install(FILES ${_VCPKG_DLLS} DESTINATION .)
+
+# PCL DLLs (non-debug only)
+set(_PCL_INSTALL_DLLS
+    "${PCL_ROOT}/bin/pcl_common.dll"
+    "${PCL_ROOT}/bin/pcl_features.dll"
+    "${PCL_ROOT}/bin/pcl_filters.dll"
+    "${PCL_ROOT}/bin/pcl_io.dll"
+    "${PCL_ROOT}/bin/pcl_io_ply.dll"
+    "${PCL_ROOT}/bin/pcl_kdtree.dll"
+    "${PCL_ROOT}/bin/pcl_ml.dll"
+    "${PCL_ROOT}/bin/pcl_octree.dll"
+    "${PCL_ROOT}/bin/pcl_registration.dll"
+    "${PCL_ROOT}/bin/pcl_sample_consensus.dll"
+    "${PCL_ROOT}/bin/pcl_search.dll"
+    "${PCL_ROOT}/bin/pcl_segmentation.dll"
+)
+install(FILES ${_PCL_INSTALL_DLLS} DESTINATION .)
+
+# VTK DLLs
+file(GLOB _VTK_DLLS "${PCL_ROOT}/3rdParty/VTK/bin/vtk*.dll")
+list(FILTER _VTK_DLLS EXCLUDE REGEX "d\\.dll$")
+install(FILES ${_VTK_DLLS} DESTINATION .)
+
+# FLANN DLL
+install(FILES "${PCL_ROOT}/3rdParty/FLANN/bin/flann_cpp.dll" DESTINATION .)
+
+# OpenCV DLL
+install(FILES "D:/Software/opencv/build/x64/vc16/bin/opencv_world470.dll" DESTINATION .)
+
+# OpenNI2 DLL
+install(FILES "C:/Program Files/OpenNI2/Redist/OpenNI2.dll" DESTINATION .)
+
+# ═══════════════════════════════════════════════════
+# CPack
+# ═══════════════════════════════════════════════════
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_PACKAGE_NAME "MspaceViewer")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "LiDAR point cloud visualization and registration application")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/\\.git/"
+    "/build/"
+    "/MspaceViewer_Release/")
+include(CPack)
