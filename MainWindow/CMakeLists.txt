@@ -131,9 +131,11 @@ add_custom_command(TARGET MspaceViewer POST_BUILD
 )
 
 # ── 自动拷贝所有 transitive runtime DLL（OSG, libLAS, Qt 等）──
+# Filter out .lib import libraries that TARGET_RUNTIME_DLLS may include on Windows
+set(_RUNTIME_DLLS "$<TARGET_RUNTIME_DLLS:MspaceViewer>")
 add_custom_command(TARGET MspaceViewer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_RUNTIME_DLLS:MspaceViewer>"
+        "$<LIST:FILTER,${_RUNTIME_DLLS},EXCLUDE,.*\\.lib$>"
         "$<TARGET_FILE_DIR:MspaceViewer>"
     COMMAND_EXPAND_LISTS
     COMMENT "Copying runtime DLL dependencies..."
