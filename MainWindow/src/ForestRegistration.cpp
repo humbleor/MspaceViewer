@@ -22,6 +22,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
 
 #include <algorithm>
 
@@ -357,6 +358,16 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 			logToLoggerForest(logger, line + "\n");
 		}
 		logToLoggerForest(logger, tr("Transform matrix saved to: ") + QString::fromStdString(outFile) + "\n");
+		logToLoggerForest(logger, tr("===================================\n"));
+
+		// --- Step 9: Transform source cloud and save ---
+		pcl::PointCloud<pcl::PointXYZ>::Ptr registered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::transformPointCloud(*source_cloud, *registered_cloud, final_matrix);
+
+		std::string registeredFile = outputDir + "/" + sourcePath.stem().string() + "_registered.las";
+		writeLas(registeredFile, registered_cloud);
+		logToLoggerForest(logger, tr("Registered point cloud saved to: ") + QString::fromStdString(registeredFile) + "\n");
+		logToLoggerForest(logger, tr("Registered points: %1\n").arg(registered_cloud->size()));
 		logToLoggerForest(logger, tr("===================================\n"));
 		logToLoggerForest(logger, tr("Forest registration completed!\n"));
 

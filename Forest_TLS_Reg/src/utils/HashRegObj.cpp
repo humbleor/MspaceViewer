@@ -1542,38 +1542,104 @@ void HashRegDescManager::candidate_frames_verify( const FrameInfo &curr_frame,
     }
     std::cout << "***************************max_vote: " << max_vote << std::endl;
     // the triangle with maxmium votes
-    if (max_vote >= 3) 
+    if (max_vote >= 3)
     {
-        // the best pair, and use it to calculate best pose
+        // Step 1: use the best-voted single triangle pair to get an initial transform
         auto best_pair = candidate_matcher.match_list_[max_vote_index * skip_len];
-        int vote = 0;
-        Eigen::Matrix3d best_rot;
-        Eigen::Vector3d best_t;
-        triangle_solver(best_pair, best_t, best_rot);
-        relative_pose.first = best_t;
-        relative_pose.second = best_rot;
-        // loop all triangles, and get the sucess matched triangles
-        for (size_t j = 0; j < candidate_matcher.match_list_.size(); j++) 
+        Eigen::Matrix3d init_rot;
+        Eigen::Vector3d init_t;
+        triangle_solver(best_pair, init_t, init_rot);
+
+        // Step 2: collect all inlier vertex pairs using the initial transform
+        std::vector<Eigen::Vector3d> src_pts, tgt_pts;
+        for (size_t j = 0; j < candidate_matcher.match_list_.size(); j++)
         {
-            auto verify_pair = candidate_matcher.match_list_[j];
+            auto &verify_pair = candidate_matcher.match_list_[j];
             Eigen::Vector3d A = verify_pair.first.vertex_A_;
-            Eigen::Vector3d A_transform = best_rot * A + best_t;
+            Eigen::Vector3d A_transform = init_rot * A + init_t;
             Eigen::Vector3d B = verify_pair.first.vertex_B_;
-            Eigen::Vector3d B_transform = best_rot * B + best_t;
+            Eigen::Vector3d B_transform = init_rot * B + init_t;
             Eigen::Vector3d C = verify_pair.first.vertex_C_;
-            Eigen::Vector3d C_transform = best_rot * C + best_t;
+            Eigen::Vector3d C_transform = init_rot * C + init_t;
             double dis_A = (A_transform - verify_pair.second.vertex_A_).norm();
             double dis_B = (B_transform - verify_pair.second.vertex_B_).norm();
             double dis_C = (C_transform - verify_pair.second.vertex_C_).norm();
-            if (dis_A < dis_threshold && dis_B < dis_threshold && dis_C < dis_threshold) 
+            if (dis_A < dis_threshold && dis_B < dis_threshold && dis_C < dis_threshold)
             {
-                // transform the triangle descriptor
-                verify_pair.first.vertex_A_ = A_transform;
-                verify_pair.first.vertex_B_ = B_transform;
-                verify_pair.first.vertex_C_ = C_transform;
-                // get the sucess matched triangles
-                sucess_match_vec.push_back(verify_pair);
+                // each triangle contributes 3 vertex correspondences
+                src_pts.push_back(A);
+                tgt_pts.push_back(verify_pair.second.vertex_A_);
+                src_pts.push_back(B);
+                tgt_pts.push_back(verify_pair.second.vertex_B_);
+                src_pts.push_back(C);
+                tgt_pts.push_back(verify_pair.second.vertex_C_);
             }
+        }
+        std::cout << "***************************inlier vertex pairs: " << src_pts.size() / 3
+                  << " triangles (" << src_pts.size() << " points)" << std::endl;
+
+        // Step 3: global SVD on all inlier vertex pairs
+        if (src_pts.size() >= 3)
+        {
+            Eigen::Vector3d src_centroid = Eigen::Vector3d::Zero();
+            Eigen::Vector3d tgt_centroid = Eigen::Vector3d::Zero();
+            for (size_t i = 0; i < src_pts.size(); i++)
+            {
+                src_centroid += src_pts[i];
+                tgt_centroid += tgt_pts[i];
+            }
+            src_centroid /= src_pts.size();
+            tgt_centroid /= tgt_pts.size();
+
+            Eigen::Matrix3d H = Eigen::Matrix3d::Zero();
+            for (size_t i = 0; i < src_pts.size(); i++)
+            {
+                H += (src_pts[i] - src_centroid) * (tgt_pts[i] - tgt_centroid).transpose();
+            }
+
+            Eigen::JacobiSVD<Eigen::Matrix3d> svd(H, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            Eigen::Matrix3d U = svd.matrixU();
+            Eigen::Matrix3d V = svd.matrixV();
+
+            Eigen::Matrix3d best_rot = V * U.transpose();
+            if (best_rot.determinant() < 0)
+            {
+                Eigen::Matrix3d K;
+                K << 1, 0, 0, 0, 1, 0, 0, 0, -1;
+                best_rot = V * K * U.transpose();
+            }
+            Eigen::Vector3d best_t = tgt_centroid - best_rot * src_centroid;
+
+            relative_pose.first = best_t;
+            relative_pose.second = best_rot;
+
+            // Step 4: re-verify with the global SVD transform to get final inlier set
+            for (size_t j = 0; j < candidate_matcher.match_list_.size(); j++)
+            {
+                auto verify_pair = candidate_matcher.match_list_[j];
+                Eigen::Vector3d A = verify_pair.first.vertex_A_;
+                Eigen::Vector3d A_transform = best_rot * A + best_t;
+                Eigen::Vector3d B = verify_pair.first.vertex_B_;
+                Eigen::Vector3d B_transform = best_rot * B + best_t;
+                Eigen::Vector3d C = verify_pair.first.vertex_C_;
+                Eigen::Vector3d C_transform = best_rot * C + best_t;
+                double dis_A = (A_transform - verify_pair.second.vertex_A_).norm();
+                double dis_B = (B_transform - verify_pair.second.vertex_B_).norm();
+                double dis_C = (C_transform - verify_pair.second.vertex_C_).norm();
+                if (dis_A < dis_threshold && dis_B < dis_threshold && dis_C < dis_threshold)
+                {
+                    verify_pair.first.vertex_A_ = A_transform;
+                    verify_pair.first.vertex_B_ = B_transform;
+                    verify_pair.first.vertex_C_ = C_transform;
+                    sucess_match_vec.push_back(verify_pair);
+                }
+            }
+        }
+        else
+        {
+            // fallback to single-pair transform if too few inliers
+            relative_pose.first = init_t;
+            relative_pose.second = init_rot;
         }
         std::cout << "***************************sucess_match_vec: " << sucess_match_vec.size() << std::endl;
         
@@ -1682,7 +1748,7 @@ double HashRegDescManager::geometric_verify(
                 double point_to_target;
                 if(searchPoint.intensity != nearstPoint.intensity)
                     continue;
-                else if(nearstPoint.intensity = 0)
+                else if(nearstPoint.intensity == 0)
                 {
                     point_to_target = fabs(tni.transpose() * (pi - tpi));
                     // double dxy = sqrt((pi - tpi)[0]*(pi - tpi)[0] + (pi - tpi)[1]*(pi - tpi)[1]);
@@ -1694,7 +1760,7 @@ double HashRegDescManager::geometric_verify(
                         break;
                     }
                 } 
-                else if(nearstPoint.intensity = 1)
+                else if(nearstPoint.intensity == 1)
                 {
                     point_to_target = ((pi - tpi).cross(tni)).norm()/2;
                     // double dxy = sqrt((pi - tpi)[0]*(pi - tpi)[0] + (pi - tpi)[1]*(pi - tpi)[1]);
