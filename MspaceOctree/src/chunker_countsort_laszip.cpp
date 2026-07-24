@@ -155,7 +155,9 @@ namespace chunker_countsort_laszip {
 			Vector3 max;
 		};
 
-		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes](shared_ptr<Task> task){
+		std::atomic_int64_t pointsProcessed{0};
+
+		auto processor = [gridSize, &grid, tStart, &state, &outputAttributes, &pointsProcessed](shared_ptr<Task> task){
 			string path = task->path;
 			int64_t start = task->firstByte;//需要读的第一个点在整个殿中占第几个
 			int64_t numBytes = task->numBytes;
@@ -263,11 +265,10 @@ namespace chunker_countsort_laszip {
 			laszip_close_reader(laszip_reader);
 			laszip_destroy(laszip_reader);
 
-			static int64_t pointsProcessed = 0;
 			pointsProcessed += task->numPoints;
 
 			state.name = "COUNTING";
-			state.pointsProcessed = pointsProcessed;
+			state.pointsProcessed = pointsProcessed.load();
 			state.duration = now() - tStart;
 
 			//cout << ("end: " + formatNumber(dbgCurr)) << endl;
@@ -1181,6 +1182,7 @@ namespace chunker_countsort_laszip {
 
 		auto tStart = now();
 
+		nodes.clear();
 		int64_t tmp = state.pointsTotal / 20;
 		maxPointsPerChunk = std::min(tmp, int64_t(10'000'000));
 		// cout << "maxPointsPerChunk: " << maxPointsPerChunk << endl;

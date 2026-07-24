@@ -178,7 +178,7 @@ namespace indexer{
 
 		lock_guard<mutex> lock(mtx_chunkRoot);
 
-		static int64_t offset = 0;
+		int64_t offset = static_cast<int64_t>(fChunkRoots.tellp());
 		int64_t size = chunkRoot->points->size;
 
 		fChunkRoots.write(chunkRoot->points->data_char, size);
@@ -191,8 +191,6 @@ namespace indexer{
 		chunkRoot->points = nullptr;
 
 		flushedChunkRoots.push_back(fcr);
-
-		offset += size;
 	}
 
 	vector<CRNode> Indexer::processChunkRoots(){
@@ -234,7 +232,7 @@ namespace indexer{
 
 		// recursively merge leaves if sum(points) < threshold
 		auto cr_root = nodesMap["r"];
-		static int64_t threshold = 5'000'000;
+		const int64_t threshold = 5'000'000;
 
 		cr_root->traversePost([](CRNode* node){
 			
