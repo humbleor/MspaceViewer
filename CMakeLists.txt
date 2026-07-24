@@ -189,6 +189,13 @@ add_subdirectory(ULS-TLS)
 add_subdirectory(D4PCR)
 add_subdirectory(MainWindow)
 
+# ── D4PCR CLI tool (outlier removal registration) ──
+add_executable(OutlierRemovalRegCLI ${CMAKE_SOURCE_DIR}/cli/OutlierRemovalRegCLI.cpp)
+target_link_libraries(OutlierRemovalRegCLI D4PCR ${PCL_LIBRARIES} Eigen3::Eigen)
+set_target_properties(OutlierRemovalRegCLI PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 # ═══════════════════════════════════════════════════
 # CMake Install + CPack
 # ═══════════════════════════════════════════════════
