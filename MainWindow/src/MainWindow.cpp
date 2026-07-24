@@ -3,6 +3,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QtWidgets/QProgressBar>
 #include <QtWidgets/QFileDialog>
+#include <atomic>
 #include <QtWidgets/QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -214,9 +215,17 @@ void MainWindow::loadFile()
 
 void MainWindow::registration_TLS_ULS()
 {
+	if (_isRegistering.exchange(true))
+	{
+		ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
+		return;
+	}
 	std::shared_ptr<RegistrationULS> _registrationULS = std::make_shared<RegistrationULS>(this);
     if (!_registrationULS->exec())
+	{
+		_isRegistering = false;
 		return;
+	}
 	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
 	pDlg->setWindowTitle(tr("Tips"));
 	pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
@@ -224,15 +233,24 @@ void MainWindow::registration_TLS_ULS()
 	pBar->setRange(0, 0);
 	pBar->setAlignment(Qt::AlignCenter);
 	pDlg->setBar(pBar);
+	ui._Logger->insertPlainText(tr("\n========== ULS-TLS Registration ==========\n"));
 	_registrationULS->executeRegistration(pDlg.get(), ui._Logger);
-  
+	_isRegistering = false;
 }
 
 void MainWindow::outlierRemovalRegistration()
 {
+    if (_isRegistering.exchange(true))
+    {
+        ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
+        return;
+    }
     std::shared_ptr<OutlierRemovalRegistration> _outlierRemovalRegistration = std::make_shared<OutlierRemovalRegistration>(this);
     if (!_outlierRemovalRegistration->exec())
+    {
+        _isRegistering = false;
         return;
+    }
     std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
     pDlg->setWindowTitle(tr("Tips"));
     pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
@@ -240,14 +258,24 @@ void MainWindow::outlierRemovalRegistration()
     pBar->setRange(0, 0);
     pBar->setAlignment(Qt::AlignCenter);
     pDlg->setBar(pBar);
+	ui._Logger->insertPlainText(tr("\n========== Outlier Removal Registration ==========\n"));
 	_outlierRemovalRegistration->executeRegistration(pDlg.get(), ui._Logger);
+	_isRegistering = false;
 }
 
 void MainWindow::registration_TLS()
 {
+    if (_isRegistering.exchange(true))
+    {
+        ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
+        return;
+    }
     std::shared_ptr<RegistrationForm_TLS> _registrationTLS = std::make_shared<RegistrationForm_TLS>(this);
     if (!_registrationTLS->exec())
+    {
+        _isRegistering = false;
         return;
+    }
     std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
     pDlg->setWindowTitle(tr("Tips"));
     pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
@@ -255,14 +283,24 @@ void MainWindow::registration_TLS()
     pBar->setRange(0, 0);
     pBar->setAlignment(Qt::AlignCenter);
     pDlg->setBar(pBar);
+    ui._Logger->insertPlainText(tr("\n========== TLS-TLS Registration ==========\n"));
     _registrationTLS->executeRegistration(pDlg.get(), ui._Logger);
+    _isRegistering = false;
 }
 
 void MainWindow::registration_Forest()
 {
+	if (_isRegistering.exchange(true))
+	{
+		ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
+		return;
+	}
 	std::shared_ptr<ForestRegistration> _forestRegistration = std::make_shared<ForestRegistration>(this);
     if (!_forestRegistration->exec())
+	{
+		_isRegistering = false;
 		return;
+	}
 	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
 	pDlg->setWindowTitle(tr("Tips"));
 	pDlg->setModal(true);
@@ -270,14 +308,24 @@ void MainWindow::registration_Forest()
 	pBar->setRange(0, 0);
 	pBar->setAlignment(Qt::AlignCenter);
 	pDlg->setBar(pBar);
+	ui._Logger->insertPlainText(tr("\n========== Forest TLS Registration ==========\n"));
 	_forestRegistration->executeRegistration(pDlg.get(), ui._Logger);
+	_isRegistering = false;
 }
 
 void MainWindow::registration_Position()
 {
+	if (_isRegistering.exchange(true))
+	{
+		ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
+		return;
+	}
 	std::shared_ptr<PositionRegistration> _positionRegistration = std::make_shared<PositionRegistration>(this);
     if (!_positionRegistration->exec())
+	{
+		_isRegistering = false;
 		return;
+	}
 	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
 	pDlg->setWindowTitle(tr("Tips"));
 	pDlg->setModal(true);
@@ -285,7 +333,9 @@ void MainWindow::registration_Position()
 	pBar->setRange(0, 0);
 	pBar->setAlignment(Qt::AlignCenter);
 	pDlg->setBar(pBar);
+	ui._Logger->insertPlainText(tr("\n========== Position-Based Registration ==========\n"));
 	_positionRegistration->executeRegistration(pDlg.get(), ui._Logger);
+	_isRegistering = false;
 }
 
 void MainWindow::changeLanguage_Chinese()

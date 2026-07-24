@@ -85,4 +85,5 @@ private:
     QTranslator english;
 
     bool output_English = false;
+    std::atomic<bool> _isRegistering{false};  // 防止配准重入
 };
