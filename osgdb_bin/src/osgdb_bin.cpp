@@ -1,5 +1,6 @@
 #include "../include/osgdb_bin.h"
 #include "../../MSpaceOctree/modules/unsuck/unsuck.hpp"
+#include <osg/Point>
 
 osgDB_bin::osgDB_bin()
 {
@@ -98,6 +99,8 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
     _geometry->setVertexArray(_coordinates);
     _geometry->setColorArray(_colors, osg::Array::BIND_PER_VERTEX);
     _geometry->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, numpoints));
+    osg::ref_ptr<osg::Point> pointSize = new osg::Point(3.0f);
+    _geometry->getOrCreateStateSet()->setAttribute(pointSize);
     _geode->addDrawable(_geometry);
     return _geode;
 }

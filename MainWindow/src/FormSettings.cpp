@@ -12,6 +12,7 @@
 #include <osg/LineWidth>
 #include <osg/Point>
 #include <osg/MatrixTransform>
+#include <osg/ComputeBoundsVisitor>
 
 
 FormSettings::FormSettings(QVBoxLayout* layout, QWidget* parent)
@@ -71,11 +72,55 @@ void FormSettings::loadFiles(std::vector<std::string> inputFiles, std::string ou
 
         _root->addChild(inputFileNode);
 
-        osg::BoundingSphere boundingSphere = inputFileNode->getBound();
-        osg::ref_ptr<osgGA::TrackballManipulator> manipulator = new osgGA::TrackballManipulator;
-        osg::Vec3 cameraPosition = boundingSphere.center() + osg::Vec3(0.0, 0.0, boundingSphere.radius());
-        manipulator->setHomePosition(cameraPosition, boundingSphere.center(), osg::Vec3(0.0, 1.0, 0.0));
-        _viewer->setCameraManipulator(manipulator);
+        // Compute bounding box for accurate view fitting (CloudCompare-style)
+        osg::ComputeBoundsVisitor boundsVisitor;
+        inputFileNode->accept(boundsVisitor);
+        osg::BoundingBox bbox = boundsVisitor.getBoundingBox();
+
+        if (!bbox.valid())
+        {
+            // Fallback to bounding sphere if bounding box is invalid
+            osg::BoundingSphere bs = inputFileNode->getBound();
+            bbox.set(bs.center() - osg::Vec3(bs.radius(), bs.radius(), bs.radius()),
+                     bs.center() + osg::Vec3(bs.radius(), bs.radius(), bs.radius()));
+        }
+
+        osg::Vec3 center = bbox.center();
+        double radius = bbox.radius();
+
+        // Handle degenerate case (single point or flat cloud)
+        if (radius < 1e-6)
+            radius = 1.0;
+
+        // Get camera FOV for FOV-corrected distance
+        double fov, aspectRatio, zNear, zFar;
+        _viewer->getCamera()->getProjectionMatrixAsPerspective(fov, aspectRatio, zNear, zFar);
+
+        // CloudCompare formula: distance = radius / tan(fov/2)
+        // Ensures the entire bounding box fits within the viewport
+        double distance = radius / tan(osg::DegreesToRadians(fov / 2.0));
+
+        // 20% safety margin so the cloud doesn't touch the viewport edges
+        distance *= 1.2;
+
+        // Diagonal view direction for a natural 3/4 perspective
+        osg::Vec3 viewDir(1.0, -1.0, 1.0);
+        viewDir.normalize();
+
+        osg::Vec3 cameraPosition = center + viewDir * distance;
+        osg::Vec3 up(0.0, 0.0, 1.0);  // Z-up for geospatial / point cloud data
+
+        // Reuse existing manipulator if available, otherwise create one
+        osg::ref_ptr<osgGA::TrackballManipulator> manipulator =
+            dynamic_cast<osgGA::TrackballManipulator*>(_viewer->getCameraManipulator());
+        if (!manipulator.valid())
+        {
+            manipulator = new osgGA::TrackballManipulator;
+            _viewer->setCameraManipulator(manipulator);
+        }
+
+        manipulator->setHomePosition(cameraPosition, center, up);
+        _viewer->home();
     }
 }
 
