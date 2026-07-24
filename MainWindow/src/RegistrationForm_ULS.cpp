@@ -161,47 +161,68 @@ void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
 	u2t->setNumSectors(numSectors);
 	u2t->descriptorsThreshold(angleThe, a2DThe, a3DThe);
 	u2t->registration();
-	std::array<std::array<float, 4>, 4> transMatrix = u2t->getTranslationMatrix();
+	std::array<std::array<float, 4>, 4> coarseMatrix = u2t->getCoarseMatrix();
+	std::array<std::array<float, 4>, 4> icpMatrix = u2t->getIcpMatrix();
+	std::array<std::array<float, 4>, 4> totalMatrix = u2t->getTotalMatrix();
 
 	logToLoggerULS(logger, tr("Point cloud registration completed!") + "\n");
 	logToLoggerULS(logger, tr("===================================") + "\n");
-	logToLoggerULS(logger, tr("Transformation Matrix:") + "\n");
-	logToLoggerULS(logger, QString::number(transMatrix[0][0], 'f', 6) + "\t" + QString::number(transMatrix[0][1], 'f', 6) + "\t" + QString::number(transMatrix[0][2], 'f', 6) + "\t" + QString::number(transMatrix[0][3], 'f', 6) + "\n");
-	logToLoggerULS(logger, QString::number(transMatrix[1][0], 'f', 6) + "\t" + QString::number(transMatrix[1][1], 'f', 6) + "\t" + QString::number(transMatrix[1][2], 'f', 6) + "\t" + QString::number(transMatrix[1][3], 'f', 6) + "\n");
-	logToLoggerULS(logger, QString::number(transMatrix[2][0], 'f', 6) + "\t" + QString::number(transMatrix[2][1], 'f', 6) + "\t" + QString::number(transMatrix[2][2], 'f', 6) + "\t" + QString::number(transMatrix[2][3], 'f', 6) + "\n");
-	logToLoggerULS(logger, QString::number(transMatrix[3][0], 'f', 6) + "\t" + QString::number(transMatrix[3][1], 'f', 6) + "\t" + QString::number(transMatrix[3][2], 'f', 6) + "\t" + QString::number(transMatrix[3][3], 'f', 6) + "\n");
+
+	// 输出粗配准矩阵
+	logToLoggerULS(logger, tr("Coarse Registration Matrix:") + "\n");
+	for (int i = 0; i < 4; i++)
+		logToLoggerULS(logger, QString::number(coarseMatrix[i][0], 'f', 6) + "\t" + QString::number(coarseMatrix[i][1], 'f', 6) + "\t" + QString::number(coarseMatrix[i][2], 'f', 6) + "\t" + QString::number(coarseMatrix[i][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
+
+	// 输出 ICP 矩阵
+	logToLoggerULS(logger, tr("ICP Transformation Matrix:") + "\n");
+	for (int i = 0; i < 4; i++)
+		logToLoggerULS(logger, QString::number(icpMatrix[i][0], 'f', 6) + "\t" + QString::number(icpMatrix[i][1], 'f', 6) + "\t" + QString::number(icpMatrix[i][2], 'f', 6) + "\t" + QString::number(icpMatrix[i][3], 'f', 6) + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
+
+	// 输出总配准矩阵
+	logToLoggerULS(logger, tr("Total Transformation Matrix:") + "\n");
+	for (int i = 0; i < 4; i++)
+		logToLoggerULS(logger, QString::number(totalMatrix[i][0], 'f', 6) + "\t" + QString::number(totalMatrix[i][1], 'f', 6) + "\t" + QString::number(totalMatrix[i][2], 'f', 6) + "\t" + QString::number(totalMatrix[i][3], 'f', 6) + "\n");
 	logToLoggerULS(logger, tr("===================================") + "\n");
 
 	std::filesystem::path inputPath_uav(params.sourceFile.toStdString());
 	std::filesystem::path inputPath_tls(params.targetFile.toStdString());
 
-
-
 	std::string outputDir = params.outputDir.toStdString();
 	std::ofstream dataOut(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt");
 	dataOut << std::fixed << std::setprecision(6);
-	dataOut << transMatrix[0][0] << " " << transMatrix[0][1] << " " << transMatrix[0][2] << " " << transMatrix[0][3] << std::endl;
-	dataOut << transMatrix[1][0] << " " << transMatrix[1][1] << " " << transMatrix[1][2] << " " << transMatrix[1][3] << std::endl;
-	dataOut << transMatrix[2][0] << " " << transMatrix[2][1] << " " << transMatrix[2][2] << " " << transMatrix[2][3] << std::endl;
-	dataOut << transMatrix[3][0] << " " << transMatrix[3][1] << " " << transMatrix[3][2] << " " << transMatrix[3][3] << std::endl;
+
+	dataOut << "# Coarse Registration Matrix" << std::endl;
+	for (int i = 0; i < 4; i++)
+		dataOut << coarseMatrix[i][0] << " " << coarseMatrix[i][1] << " " << coarseMatrix[i][2] << " " << coarseMatrix[i][3] << std::endl;
+
+	dataOut << "# ICP Transformation Matrix" << std::endl;
+	for (int i = 0; i < 4; i++)
+		dataOut << icpMatrix[i][0] << " " << icpMatrix[i][1] << " " << icpMatrix[i][2] << " " << icpMatrix[i][3] << std::endl;
+
+	dataOut << "# Total Transformation Matrix" << std::endl;
+	for (int i = 0; i < 4; i++)
+		dataOut << totalMatrix[i][0] << " " << totalMatrix[i][1] << " " << totalMatrix[i][2] << " " << totalMatrix[i][3] << std::endl;
+
 	dataOut.close();
 
-	logToLoggerULS(logger, tr("Transformed information saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt") + "\n");
+	logToLoggerULS(logger, tr("Transform matrix saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_uav.stem().string() + "_to_" + inputPath_tls.stem().string() + "_transformationMatrix.txt") + "\n");
+	logToLoggerULS(logger, tr("===================================") + "\n");
 
+	// Apply transformation to TLS point cloud and save
 	std::array<std::array<float, 3>, 3> rotMatrix;
-	rotMatrix[0][0] = transMatrix[0][0]; rotMatrix[0][1] = transMatrix[0][1]; rotMatrix[0][2] = transMatrix[0][2];
-	rotMatrix[1][0] = transMatrix[1][0]; rotMatrix[1][1] = transMatrix[1][1]; rotMatrix[1][2] = transMatrix[1][2];
-	rotMatrix[2][0] = transMatrix[2][0]; rotMatrix[2][1] = transMatrix[2][1]; rotMatrix[2][2] = transMatrix[2][2];
+	rotMatrix[0][0] = totalMatrix[0][0]; rotMatrix[0][1] = totalMatrix[0][1]; rotMatrix[0][2] = totalMatrix[0][2];
+	rotMatrix[1][0] = totalMatrix[1][0]; rotMatrix[1][1] = totalMatrix[1][1]; rotMatrix[1][2] = totalMatrix[1][2];
+	rotMatrix[2][0] = totalMatrix[2][0]; rotMatrix[2][1] = totalMatrix[2][1]; rotMatrix[2][2] = totalMatrix[2][2];
 	tls->rotate(rotMatrix);
 
-	Point3f translation(std::array<float, 3>{transMatrix[0][3], transMatrix[1][3], transMatrix[2][3]});
+	Point3f translation(std::array<float, 3>{totalMatrix[0][3], totalMatrix[1][3], totalMatrix[2][3]});
 	tls->translate(translation);
 
 	outputLasFile(outputDir + "/" + inputPath_tls.stem().string() + "_registered.las", tls);
 
 	logToLoggerULS(logger, tr("Registered point cloud saved to: ") + QString::fromStdString(outputDir + "/" + inputPath_tls.stem().string() + "_registered.las") + "\n");
-
-	logToLoggerULS(logger, tr("===================================") + "\n");
 }
 
 void RegistrationULS::apply()

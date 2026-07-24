@@ -1,10 +1,20 @@
 #include "RegistrationU2T.h"
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
+#include <pcl/filters/grid_minimum.h>
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/registration/icp.h>
+#include <pcl/search/kdtree.h>
 
 RegistrationU2T::RegistrationU2T(PointCloud3fPtr UAV, PointCloud3fPtr TLS)
     : _UAV(UAV), _TLS(TLS)
 {
     _UAVFilter = std::make_shared<PointCloud3f>();
     _TLSFilter = std::make_shared<PointCloud3f>();
+    _transformationMatrix = {{{{1,0,0,0}},{{0,1,0,0}},{{0,0,1,0}},{{0,0,0,1}}}};
+    _icpMatrix = {{{{1,0,0,0}},{{0,1,0,0}},{{0,0,1,0}},{{0,0,0,1}}}};
+    _totalMatrix = {{{{1,0,0,0}},{{0,1,0,0}},{{0,0,1,0}},{{0,0,0,1}}}};
 }
 RegistrationU2T::~RegistrationU2T() {}
 void RegistrationU2T::setGridFilterRes(float resolution) { _resolution = resolution; }
@@ -43,9 +53,12 @@ bool RegistrationU2T::registration()
     _TLSFilter->clear();
     _points_in_grid.clear();
     coarseRegistration(potentialCor, rotationTLS, optimalCor);
+    fineRegistration();
     return true;
 }
-std::array<std::array<float, 4>, 4> RegistrationU2T::getTranslationMatrix() const { return _transformationMatrix; }
+std::array<std::array<float, 4>, 4> RegistrationU2T::getCoarseMatrix() const { return _transformationMatrix; }
+std::array<std::array<float, 4>, 4> RegistrationU2T::getIcpMatrix() const { return _icpMatrix; }
+std::array<std::array<float, 4>, 4> RegistrationU2T::getTotalMatrix() const { return _totalMatrix; }
 void RegistrationU2T::gridminimumFilter()
 {
     auto filterUAV = std::make_shared<GridMinimumFilter>(_resolution);
@@ -323,6 +336,7 @@ void RegistrationU2T::coarseRegistration(std::vector<std::pair<int, int>> potent
         }
     }
     size_t minIndex = std::min_element(stdSet.begin(), stdSet.end()) - stdSet.begin();
+    _optimalCenterUAV = centerULSSet->points()[minIndex];
     float rotationAngle = 2.0f * M_PI - colSet[minIndex] * 2.0f * M_PI / 720.0f;
     const float cosAngle = std::cos(rotationAngle);
     const float sinAngle = std::sin(rotationAngle);
@@ -338,6 +352,107 @@ void RegistrationU2T::coarseRegistration(std::vector<std::pair<int, int>> potent
     _transformationMatrix[0][3] =
         centerULSSet->points()[minIndex].coords()[0] -
         (_centerTLS.coords()[0] * std::cos(rotationAngle) - _centerTLS.coords()[1] * std::sin(rotationAngle));
+}
+void RegistrationU2T::fineRegistration()
+{
+    // 提取 UAV 邻域子集
+    pcl::PointCloud<pcl::PointXYZ>::Ptr targeticp(new pcl::PointCloud<pcl::PointXYZ>);
+    for (size_t i = 0; i < _UAV->points().size(); i++)
+    {
+        float dx = _UAV->points()[i].coords()[0] - _optimalCenterUAV.coords()[0];
+        float dy = _UAV->points()[i].coords()[1] - _optimalCenterUAV.coords()[1];
+        if (std::sqrt(dx * dx + dy * dy) <= _radius)
+        {
+            pcl::PointXYZ pt;
+            pt.x = _UAV->points()[i].coords()[0];
+            pt.y = _UAV->points()[i].coords()[1];
+            pt.z = _UAV->points()[i].coords()[2];
+            targeticp->points.push_back(pt);
+        }
+    }
+    targeticp->width = targeticp->points.size();
+    targeticp->height = 1;
+
+    // 提取 TLS 邻域子集
+    pcl::PointCloud<pcl::PointXYZ>::Ptr sourceicp(new pcl::PointCloud<pcl::PointXYZ>);
+    for (size_t i = 0; i < _TLS->points().size(); i++)
+    {
+        float dx = _TLS->points()[i].coords()[0] - _centerTLS.coords()[0];
+        float dy = _TLS->points()[i].coords()[1] - _centerTLS.coords()[1];
+        if (std::sqrt(dx * dx + dy * dy) <= _radius)
+        {
+            pcl::PointXYZ pt;
+            pt.x = _TLS->points()[i].coords()[0];
+            pt.y = _TLS->points()[i].coords()[1];
+            pt.z = _TLS->points()[i].coords()[2];
+            sourceicp->points.push_back(pt);
+        }
+    }
+    sourceicp->width = sourceicp->points.size();
+    sourceicp->height = 1;
+
+    // 体素下采样
+    pcl::GridMinimum<pcl::PointXYZ> gmicp(0.05f);
+    gmicp.setInputCloud(targeticp);
+    gmicp.filter(*targeticp);
+    gmicp.setInputCloud(sourceicp);
+    gmicp.filter(*sourceicp);
+
+    // 用粗配准矩阵变换 TLS 点云
+    Eigen::Matrix4f eigenCoarse = Eigen::Matrix4f::Identity();
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            eigenCoarse(r, c) = _transformationMatrix[r][c];
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_src(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::transformPointCloud(*sourceicp, *transformed_src, eigenCoarse);
+
+    // 拼接点云与法线信息
+    pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> n;
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+    n.setNumberOfThreads(10);
+    n.setInputCloud(transformed_src);
+    n.setSearchMethod(tree);
+    n.setKSearch(10);
+    n.compute(*normals);
+    pcl::PointCloud<pcl::PointNormal>::Ptr source_with_normals(new pcl::PointCloud<pcl::PointNormal>);
+    pcl::concatenateFields(*transformed_src, *normals, *source_with_normals);
+
+    pcl::PointCloud<pcl::Normal>::Ptr normals2(new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree2(new pcl::search::KdTree<pcl::PointXYZ>());
+    n.setInputCloud(targeticp);
+    n.setSearchMethod(tree2);
+    n.compute(*normals2);
+    pcl::PointCloud<pcl::PointNormal>::Ptr target_with_normals(new pcl::PointCloud<pcl::PointNormal>);
+    pcl::concatenateFields(*targeticp, *normals2, *target_with_normals);
+
+    // 点到面 ICP
+    pcl::IterativeClosestPointWithNormals<pcl::PointNormal, pcl::PointNormal> p_icp;
+    p_icp.setInputSource(source_with_normals);
+    p_icp.setInputTarget(target_with_normals);
+    p_icp.setTransformationEpsilon(1e-10);
+    p_icp.setMaxCorrespondenceDistance(0.06f);
+    p_icp.setEuclideanFitnessEpsilon(0.00001);
+    p_icp.setMaximumIterations(35);
+
+    pcl::PointCloud<pcl::PointNormal> p_icp_cloud;
+    p_icp.align(p_icp_cloud);
+
+    Eigen::Matrix4f eigenIcp = p_icp.getFinalTransformation();
+
+    // 存储 ICP 矩阵
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            _icpMatrix[r][c] = eigenIcp(r, c);
+
+    // 总矩阵 = ICP * 粗配准
+    Eigen::Matrix4f eigenTotal = eigenIcp * eigenCoarse;
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            _totalMatrix[r][c] = eigenTotal(r, c);
+
+    std::cout << "ICP converged, fitness score: " << p_icp.getFitnessScore() << std::endl;
 }
 std::vector<float> RegistrationU2T::PCADescriptors(PointCloud3fPtr _cloud, std::vector<size_t> indices)
 {

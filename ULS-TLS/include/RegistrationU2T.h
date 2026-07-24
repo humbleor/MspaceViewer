@@ -23,7 +23,9 @@ public:
     void setTLSCenter(Point3f centerTLS);
     void descriptorsThreshold(float angleThe, float a2DThe, float a3DThe);
     bool registration();
-    std::array<std::array<float, 4>, 4> getTranslationMatrix() const;
+    std::array<std::array<float, 4>, 4> getCoarseMatrix() const;
+    std::array<std::array<float, 4>, 4> getIcpMatrix() const;
+    std::array<std::array<float, 4>, 4> getTotalMatrix() const;
 
 private:
     void gridminimumFilter();
@@ -33,6 +35,7 @@ private:
     void descriptorsMatchting(std::vector<std::pair<int, int>> potentialCor, size_t &rotationTLS,
                               std::pair<int, int> &cor);
     void coarseRegistration(std::vector<std::pair<int, int>> potentialCor, size_t rotationTLS, std::pair<int, int> cor);
+    void fineRegistration();
     std::vector<float> PCADescriptors(PointCloud3fPtr _cloud, std::vector<size_t> indices);
     std::vector<std::vector<float>> discretizePolarZAverage(const PointCloud3f &cloud, const std::vector<size_t> &idx,
                                                             const Point3f &search_pt, float R, float dR,
@@ -58,5 +61,8 @@ private:
     float _angleThreshold;
     float _a2DThreshold;
     float _a3DThreshold;
+    Point3f _optimalCenterUAV;
     std::array<std::array<float, 4>, 4> _transformationMatrix;
+    std::array<std::array<float, 4>, 4> _icpMatrix;
+    std::array<std::array<float, 4>, 4> _totalMatrix;
 };
