@@ -21,6 +21,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 #include <algorithm>
 #include <sstream>
@@ -435,6 +436,7 @@ void PositionRegistration::executeRegistration(QProgressDialog* progress, QTextE
 	params.descriptorNearNum = _descriptorNearNum->text().toInt();
 	params.disGeoVerify      = _disGeoVerify->text().toDouble();
 	params.icpThreshold      = _icpThreshold->text().toDouble();
+	params.bestPairsCount    = _bestPairsCount->text().toInt();
 
 	if (progress)
 	{
@@ -464,6 +466,7 @@ void PositionRegistration::initParam()
 	_descriptorNearNum->setText("10");
 	_disGeoVerify->setText("0.3");
 	_icpThreshold->setText("0.5");
+	_bestPairsCount->setText("7");
 }
 
 void PositionRegistration::registration(PositionRegParams params, QTextEdit* logger)
@@ -595,6 +598,74 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			dataOut << "\n";
 		}
 		dataOut.close();
+
+		// Output best point pairs CSV
+		int numPairs = params.bestPairsCount;
+		if (numPairs > 0)
+		{
+			pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+			kdtree.setInputCloud(target_cloud);
+
+			struct PointPair { double srcX, srcY, tgtX, tgtY, error; };
+			std::vector<PointPair> pairs;
+			pairs.reserve(source_centers.cols());
+
+			Eigen::Matrix3d finalRot = final_matrix.block<3, 3>(0, 0);
+			Eigen::Vector3d finalTrans = final_matrix.block<3, 1>(0, 3);
+
+			for (int i = 0; i < source_centers.cols(); i++)
+			{
+				Eigen::Vector3d pt(source_centers(0, i), source_centers(1, i), 0.0);
+				pt = finalRot * pt + finalTrans;
+				pcl::PointXYZ query(pt[0], pt[1], 0.0);
+
+				std::vector<int> indices(1);
+				std::vector<float> sqDists(1);
+				if (kdtree.nearestKSearch(query, 1, indices, sqDists) > 0)
+				{
+					PointPair pp;
+					pp.srcX = source_centers(0, i);
+					pp.srcY = source_centers(1, i);
+					pp.tgtX = target_centers(0, indices[0]);
+					pp.tgtY = target_centers(1, indices[0]);
+					pp.error = std::sqrt(sqDists[0]);
+					pairs.push_back(pp);
+				}
+			}
+
+			std::sort(pairs.begin(), pairs.end(),
+				[](const PointPair& a, const PointPair& b) { return a.error < b.error; });
+
+			int writeCount = std::min(numPairs, static_cast<int>(pairs.size()));
+			std::string csvFile = outputDir + "/" + sourcePath.stem().string()
+			                    + "_to_" + targetPath.stem().string() + "_bestPairs.csv";
+			std::ofstream csvOut(csvFile);
+			if (csvOut)
+			{
+				csvOut << "source_x,source_y,target_x,target_y,error\n";
+				csvOut << std::fixed << std::setprecision(6);
+				for (int i = 0; i < writeCount; i++)
+				{
+					csvOut << pairs[i].srcX << "," << pairs[i].srcY << ","
+					       << pairs[i].tgtX << "," << pairs[i].tgtY << ","
+					       << pairs[i].error << "\n";
+				}
+				csvOut.close();
+				logToLoggerPos(logger, tr("Best point pairs CSV saved to: ") + QString::fromStdString(csvFile) + "\n");
+			}
+
+			logToLoggerPos(logger, tr("Best %1 point pairs (by registration error):\n").arg(writeCount));
+			for (int i = 0; i < writeCount; i++)
+			{
+				logToLoggerPos(logger, QString("  #%1: src(%2, %3) -> tgt(%4, %5)  err=%6\n")
+					.arg(i + 1)
+					.arg(pairs[i].srcX, 0, 'f', 4)
+					.arg(pairs[i].srcY, 0, 'f', 4)
+					.arg(pairs[i].tgtX, 0, 'f', 4)
+					.arg(pairs[i].tgtY, 0, 'f', 4)
+					.arg(pairs[i].error, 0, 'f', 6));
+			}
+		}
 
 		logToLoggerPos(logger, tr("Transformation Matrix (4x4):\n"));
 		for (int i = 0; i < 4; i++)

@@ -10,7 +10,7 @@ MspaceViewer 是一款面向激光扫描（LiDAR）点云数据的桌面应用�
 
 - **点云加载与可视化**：支持 LAS/LAZ 格式点云文件，通过分层八叉树结构实现高效的 LOD（多细节层次）渲染
 - **TLS-TLS 配准**：基于菱形描述子与 FPFH 特征匹配的地面激光扫描点云配准
-- **ULS-TLS 配准**：基于 PCA 描述子与极坐标离散化的无人机到地面点云粗配准
+- **ULS-TLS 配准**：基于 PCA 描述子与极坐标离散化的无人机到地面点云配准
 - **D4PCR 离群值鲁棒配准**：使用区间 stabbing 算法实现高离群值比例下的 4DOF 配准
 - **Forest TLS Registration**：基于三角形描述符哈希表的森林场景点云配准
 - **位置配准（Position Registration）**：基于已有树干中心坐标，使用三角形描述符哈希匹配 + ICP 精配准的二维位置配准，支持 TXT/CSV/XLSX 格式输入
@@ -23,23 +23,25 @@ MspaceViewer 是一款面向激光扫描（LiDAR）点云数据的桌面应用�
 系统采用模块化 C++ 架构，基于 Qt 构建 GUI，通过 OpenSceneGraph 实现三维渲染，PCL 提供点云算法支持。
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│                      MainWindow (Qt GUI)                 │
-│  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐ │
-│  │ 数据管理树视图 │  │ osgQOpenGLWidget│  │ 配准对话框   │ │
-│  │ (QStandardItem)│  │ (OSG 渲染视图) │  │ TLS/ULS/D4PCR│ │
-│  └──────┬───────┘  └───────┬───────┘  └──────┬───────┘ │
-│         │                  │                  │          │
-└─────────┼──────────────────┼──────────────────┼──────────┘
+┌────────────────────────────────────────────────────────────┐
+│                      MainWindow (Qt GUI)                    │
+│  ┌──────────────┐  ┌───────────────┐  ┌────────────────┐  │
+│  │ 数据管理树视图 │  │ osgQOpenGLWidget│  │ 配准对话框     │  │
+│  │ (QStandardItem)│  │ (OSG 渲染视图) │  │ TLS/ULS/D4PCR/│  │
+│  │              │  │               │  │ PosReg        │  │
+│  └──────┬───────┘  └───────┬───────┘  └───────┬────────┘  │
+│         │                  │                  │             │
+└─────────┼──────────────────┼──────────────────┼─────────────┘
           │                  │                  │
           ▼                  ▼                  ▼
-┌─────────────────┐ ┌───────────────┐ ┌────────────────────┐
-│  MspaceOctree   │ │   osgQt       │ │ 配准算法模块        │
-│  八叉树数据结构  │ │ Qt-OSG 集成层  │ │ TLSRegistration    │
-│  LAS/LAZ→Octree │ │ 渲染线程管理   │ │ ULS-TLS            │
-│  Poisson/Random │ └───────────────┘ │ D4PCR              │
-│  采样           │                   │ Forest_TLS_Reg     │
-└─────────────────┘                   └────────────────────┘
+┌─────────────────┐ ┌───────────────┐ ┌──────────────────────┐
+│  MspaceOctree   │ │   osgQt       │ │ 配准算法模块          │
+│  八叉树数据结构  │ │ Qt-OSG 集成层  │ │ TLSRegistration      │
+│  LAS/LAZ→Octree │ │ 渲染线程管理   │ │ ULS-TLS              │
+│  Poisson/Random │ └───────────────┘ │ D4PCR                │
+│  采样           │                   │ Forest_TLS_Reg       │
+│                 │                   │ PositionRegistration  │
+└─────────────────┘                   └──────────────────────┘
 ```
 
 ### 目录结构
@@ -177,6 +179,7 @@ vcpkg 会自动安装以下依赖（见 `vcpkg.json`）：
 
 ```bash
 cd E:/Code/MspaceViewer
+mkdir build
 
 # 配置 CMake（使用 vcpkg toolchain）
 cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release
@@ -193,9 +196,6 @@ cmake --build build --config Release --target MspaceViewer
 
 # 编译全部模块
 cmake --build build --config Release
-
-# 编译 Debug 版本
-cmake --build build --config Debug
 ```
 
 ### 使用 Visual Studio
@@ -209,40 +209,11 @@ cmake --build build --config Debug
 
 ## 运行
 
-### 复制运行时 DLL
-
-编译完成后，需要将以下 DLL 复制到 `build/bin/Release/` 目录（或添加到系统 PATH）：
-
-```powershell
-# PCL DLLs（Release 版本，不带 'd' 后缀）
-Get-ChildItem "D:/Program Files/PCL 1.14.1/bin/pcl_*.dll" |
-  Where-Object { $_.Name -notmatch 'd\.dll$' } |
-  Copy-Item -Destination "build/bin/Release/"
-
-# OpenCV DLL
-Copy-Item "D:/Software/opencv/build/x64/vc16/bin/opencv_world470.dll" "build/bin/Release/"
-
-# VTK DLLs
-Get-ChildItem "D:/Program Files/PCL 1.14.1/3rdParty/VTK/bin/*.dll" |
-  Where-Object { $_.Name -notmatch 'd\.dll$' } |
-  Copy-Item -Destination "build/bin/Release/"
-
-# FLANN DLL
-Copy-Item "D:/Program Files/PCL 1.14.1/3rdParty/FLANN/lib/flann_cpp_s.dll" "build/bin/Release/"
-
-# OpenNI2 DLL
-Copy-Item "C:/Program Files/OpenNI2/Redist/OpenNI2.dll" "build/bin/Release/"
-
-# vcpkg DLLs（osg, liblas, Boost 等）
-Get-ChildItem "build/vcpkg_installed/x64-windows-release/bin/*.dll" |
-  Copy-Item -Destination "build/bin/Release/"
-```
-
 ### 启动程序
 
 ```bash
 # 方式一：直接运行
-build/bin/Release/MspaceViewer.exe
+双击 build/bin/Release/MspaceViewer.exe
 
 # 方式二：从项目根目录运行
 .\build\bin\Release\MspaceViewer.exe
@@ -296,16 +267,39 @@ build/bin/Release/MspaceViewer.exe
    - 对源数据构建描述符，在哈希表中搜索匹配三角形对
    - SVD 求解位姿 + 交叉投票验证
    - ICP 精配准微调
-   - 输出 4×4 变换矩阵文件
+   - 输出 4×4 变换矩阵文件（`.txt`）
+   - 输出配准误差最小的 N 对控制点 CSV 文件（`.csv`），默认 N=7
 
-## 快速开始（一行命令）
+## 打包发布
 
-已安装所有依赖后，执行以下命令即可完成构建：
+项目使用 **CPack** 打包，一键完成编译、安装、打包：
 
 ```powershell
-# 配置 + 编译
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release 2>&1; cmake --build build --config Release 2>&1
+# 编译 → 安装（收集 exe + 所有依赖 DLL） → 打包为 ZIP
+cmake --build build --config Release 2>&1; cmake --install build --config Release 2>&1; cd build; cpack -C Release -G ZIP 2>&1
 ```
+
+执行完成后在 `build/` 目录下生成 `MspaceViewer-1.0.0-win64.zip`，包含完整可运行的应用程序。
+
+### 打包流程说明
+
+| 步骤 | 命令 | 作用 |
+|------|------|------|
+| 编译 | `cmake --build build --config Release` | 编译所有模块（exe + DLL） |
+| 安装 | `cmake --install build --config Release` | 将 exe、DLL、插件、资源收集到 `build/bin/` |
+| 打包 | `cpack -C Release -G ZIP` | 将 `build/bin/` 内容压缩为 ZIP 发布包 |
+
+### 打包内容
+
+| 来源 | 文件 |
+|------|------|
+| 项目目标 | MspaceViewer.exe, MspaceOctree.dll, osgQt.dll, osgdb_bin.dll, D4PCR.dll, ULS-TLS.dll, TLSRegistration.dll |
+| vcpkg | OSG, libLAS, Boost, FreeType 等 DLL |
+| PCL | pcl_*.dll, VTK DLLs, FLANN DLL |
+| Qt6 | Qt6Core/Gui/Widgets/Concurrent/OpenGL 等 DLL |
+| OpenCV | opencv_world470.dll |
+| 插件 | osgPlugins-3.6.5/, platforms/ |
+| 资源 | resource/ 目录 |
 
 ## 贡献指南
 

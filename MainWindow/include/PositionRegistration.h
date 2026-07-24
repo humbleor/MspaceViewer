@@ -21,6 +21,7 @@ struct PositionRegParams {
 	int     descriptorNearNum = 10;
 	double  disGeoVerify      = 0.3;
 	double  icpThreshold      = 0.5;
+	int     bestPairsCount    = 7;
 };
 
 class PositionRegistration : public QDialog, public Ui::PositionRegistration, public std::enable_shared_from_this<PositionRegistration>
