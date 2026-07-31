@@ -5,6 +5,31 @@
 #include <omp.h>
 #include <limits>
 
+// True if a point set lies in the XY plane (z == 0), i.e. the 2D tree-center case.
+static bool is_xy_planar(const std::vector<Eigen::Vector3d> &pts)
+{
+    for (const auto &p : pts)
+        if (std::abs(p[2]) > 1e-6) return false;
+    return true;
+}
+
+// Best-fit proper 2D (XY-plane) rotation via Umeyama SVD. On coplanar data the 3D
+// SVD is rank-deficient and may return an in-plane reflection (det(R_xy) = -1).
+static Eigen::Matrix2d proper_2d_rotation(const Eigen::Matrix2d &H)
+{
+    Eigen::JacobiSVD<Eigen::Matrix2d> svd(H, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::Matrix2d U = svd.matrixU();
+    Eigen::Matrix2d V = svd.matrixV();
+    Eigen::Matrix2d R = V * U.transpose();
+    if (R.determinant() < 0)
+    {
+        Eigen::Matrix2d K;
+        K << 1, 0, 0, -1;
+        R = V * K * U.transpose();
+    }
+    return R;
+}
+
 // sort the node by vote number
 bool sortByVoteNumber(const std::pair<int, int> a, const std::pair<int, int> b)
 {
@@ -1597,16 +1622,25 @@ void HashRegDescManager::candidate_frames_verify( const FrameInfo &curr_frame,
                 H += (src_pts[i] - src_centroid) * (tgt_pts[i] - tgt_centroid).transpose();
             }
 
-            Eigen::JacobiSVD<Eigen::Matrix3d> svd(H, Eigen::ComputeThinU | Eigen::ComputeThinV);
-            Eigen::Matrix3d U = svd.matrixU();
-            Eigen::Matrix3d V = svd.matrixV();
-
-            Eigen::Matrix3d best_rot = V * U.transpose();
-            if (best_rot.determinant() < 0)
+            Eigen::Matrix3d best_rot = Eigen::Matrix3d::Identity();
+            if (is_xy_planar(src_pts))
             {
-                Eigen::Matrix3d K;
-                K << 1, 0, 0, 0, 1, 0, 0, 0, -1;
-                best_rot = V * K * U.transpose();
+                // Coplanar (2D tree-center) case: solve in the XY plane for a proper 2D rotation.
+                best_rot.block<2, 2>(0, 0) = proper_2d_rotation(H.block<2, 2>(0, 0));
+            }
+            else
+            {
+                Eigen::JacobiSVD<Eigen::Matrix3d> svd(H, Eigen::ComputeThinU | Eigen::ComputeThinV);
+                Eigen::Matrix3d U = svd.matrixU();
+                Eigen::Matrix3d V = svd.matrixV();
+
+                best_rot = V * U.transpose();
+                if (best_rot.determinant() < 0)
+                {
+                    Eigen::Matrix3d K;
+                    K << 1, 0, 0, 0, 1, 0, 0, 0, -1;
+                    best_rot = V * K * U.transpose();
+                }
             }
             Eigen::Vector3d best_t = tgt_centroid - best_rot * src_centroid;
 
@@ -1677,18 +1711,29 @@ void HashRegDescManager::triangle_solver(std::pair<TriDesc, TriDesc> &std_pair,
     ref.col(1) = std_pair.second.vertex_B_ - std_pair.second.center_;
     ref.col(2) = std_pair.second.vertex_C_ - std_pair.second.center_;
     Eigen::Matrix3d covariance = src * ref.transpose(); // matrix, 3*3
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(covariance, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::Matrix3d V = svd.matrixV();
-    Eigen::Matrix3d U = svd.matrixU();
-    // calculate the Rot and Trans
-    rot = V * U.transpose();
-    if (rot.determinant() < 0) 
+    rot.setIdentity();
+    if (std::abs(std_pair.first.vertex_A_[2]) < 1e-6 &&
+        std::abs(std_pair.first.vertex_B_[2]) < 1e-6 &&
+        std::abs(std_pair.first.vertex_C_[2]) < 1e-6)
     {
-        Eigen::Matrix3d K;
-        K << 1, 0, 0, 0, 1, 0, 0, 0, -1;
-        rot = V * K * U.transpose();
+        // Coplanar (2D tree-center) case: solve in the XY plane for a proper 2D rotation.
+        rot.block<2, 2>(0, 0) = proper_2d_rotation(covariance.block<2, 2>(0, 0));
     }
-    t = -rot * std_pair.first.center_ + std_pair.second.center_;    
+    else
+    {
+        Eigen::JacobiSVD<Eigen::MatrixXd> svd(covariance, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        Eigen::Matrix3d V = svd.matrixV();
+        Eigen::Matrix3d U = svd.matrixU();
+        // calculate the Rot and Trans
+        rot = V * U.transpose();
+        if (rot.determinant() < 0)
+        {
+            Eigen::Matrix3d K;
+            K << 1, 0, 0, 0, 1, 0, 0, 0, -1;
+            rot = V * K * U.transpose();
+        }
+    }
+    t = -rot * std_pair.first.center_ + std_pair.second.center_;
 }
 
 // geometric verify, the distance of point_to_plane, and the normal difference
@@ -1715,10 +1760,40 @@ double HashRegDescManager::geometric_verify(
     int K = 3;
     std::vector<int> pointIdxNKNSearch(K);
     std::vector<float> pointNKNSquaredDistance(K);
+    double dis_threshold = config_setting_.dis_geo_verify;
+
+    // 2D tree-center data has zero normals, so the point-to-plane / point-to-line
+    // distances below are meaningless (always 0). Use Euclidean target-tree
+    // coverage instead.
+    bool is_2d = true;
+    for (size_t i = 0; i < target_cloud->size(); i++) {
+        const pcl::PointXYZINormal &p = target_cloud->points[i];
+        if (p.normal_x != 0.0 || p.normal_y != 0.0 || p.normal_z != 0.0) { is_2d = false; break; }
+    }
+    if (is_2d) {
+        std::vector<bool> covered(target_cloud->size(), false);
+        for (size_t i = 0; i < source_cloud->size(); i++) {
+            Eigen::Vector3d pi(source_cloud->points[i].x, source_cloud->points[i].y, source_cloud->points[i].z);
+            pi = rot * pi + t;
+            pcl::PointXYZ query(pi[0], pi[1], 0.0f);   // targets lie in the z = 0 plane
+            if (kd_tree->nearestKSearch(query, K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0) {
+                for (int j = 0; j < K; j++) {
+                    size_t idx = pointIdxNKNSearch[j];
+                    const pcl::PointXYZINormal &np = target_cloud->points[idx];
+                    double dx = pi[0] - np.x;
+                    double dy = pi[1] - np.y;
+                    if (std::sqrt(dx * dx + dy * dy) < dis_threshold) { covered[idx] = true; break; }
+                }
+            }
+        }
+        double useful_match = 0;
+        for (bool c : covered) if (c) useful_match += 1.0;
+        return useful_match / (double)target_cloud->size();
+    }
+
     // loop all source points, and verfey the normal and distance
     double useful_match = 0;
     double normal_threshold = config_setting_.normal_geo_verify;
-    double dis_threshold = config_setting_.dis_geo_verify;
     double diff_z = 0;
     for (size_t i = 0; i < source_cloud->size(); i++) 
     {

@@ -356,22 +356,71 @@ static void icp_registration_2d(
 	pcl::PointCloud<pcl::PointXYZ>::Ptr &target,
 	std::pair<Eigen::Vector3d, Eigen::Matrix3d> &refine_transform)
 {
-	pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
-	icp.setMaxCorrespondenceDistance(2.0);
-	icp.setMaximumIterations(50);
-	icp.setTransformationEpsilon(1e-8);
-	icp.setEuclideanFitnessEpsilon(1);
-	icp.setInputSource(source);
-	icp.setInputTarget(target);
+	// 2D ICP constrained to proper XY rotations. Tree-center points lie in z = 0,
+	// where PCL's 3D SVD is rank-deficient and can snap into a reflection.
+	const double max_corr_dist = 2.0;
+	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+	kdtree.setInputCloud(target);
 
-	pcl::PointCloud<pcl::PointXYZ> Final;
-	icp.align(Final);
+	Eigen::Matrix2d R2 = Eigen::Matrix2d::Identity();
+	Eigen::Vector2d t2 = Eigen::Vector2d::Zero();
 
-	std::cout << "ICP hasConverged: " << icp.hasConverged()
-	          << " score: " << icp.getFitnessScore() << std::endl;
+	for (int iter = 0; iter < 50; iter++)
+	{
+		std::vector<Eigen::Vector2d> src2d, tgt2d;
+		for (size_t i = 0; i < source->points.size(); i++)
+		{
+			const pcl::PointXYZ &pt = source->points[i];
+			Eigen::Vector2d p(R2(0, 0) * pt.x + R2(0, 1) * pt.y + t2[0],
+			                   R2(1, 0) * pt.x + R2(1, 1) * pt.y + t2[1]);
+			std::vector<int> idx(1);
+			std::vector<float> sq(1);
+			if (kdtree.nearestKSearch(pcl::PointXYZ(p[0], p[1], 0.0f), 1, idx, sq) > 0 &&
+			    std::sqrt(sq[0]) < max_corr_dist)
+			{
+				src2d.push_back(p);
+				tgt2d.push_back(Eigen::Vector2d(target->points[idx[0]].x, target->points[idx[0]].y));
+			}
+		}
+		if (src2d.size() < 3) break;
 
-	Eigen::Matrix4f trans = icp.getFinalTransformation();
-	matrix_to_pair(trans, refine_transform);
+		Eigen::Vector2d cs = Eigen::Vector2d::Zero();
+		Eigen::Vector2d ct = Eigen::Vector2d::Zero();
+		for (size_t i = 0; i < src2d.size(); i++) { cs += src2d[i]; ct += tgt2d[i]; }
+		cs /= (double)src2d.size();
+		ct /= (double)src2d.size();
+
+		Eigen::Matrix2d H = Eigen::Matrix2d::Zero();
+		for (size_t i = 0; i < src2d.size(); i++)
+		{
+			Eigen::Vector2d s = src2d[i] - cs;
+			Eigen::Vector2d tt = tgt2d[i] - ct;
+			H += s * tt.transpose();
+		}
+
+		Eigen::JacobiSVD<Eigen::Matrix2d> svd(H, Eigen::ComputeFullU | Eigen::ComputeFullV);
+		Eigen::Matrix2d U = svd.matrixU();
+		Eigen::Matrix2d V = svd.matrixV();
+		Eigen::Matrix2d dR2 = V * U.transpose();
+		if (dR2.determinant() < 0)
+		{
+			Eigen::Matrix2d K2;
+			K2 << 1, 0, 0, -1;
+			dR2 = V * K2 * U.transpose();
+		}
+		Eigen::Vector2d dt2 = ct - dR2 * cs;
+
+		R2 = dR2 * R2;
+		t2 = dR2 * t2 + dt2;
+
+		if (dt2.norm() < 1e-6 && (dR2 - Eigen::Matrix2d::Identity()).norm() < 1e-6)
+			break;
+	}
+
+	Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
+	R.block<2, 2>(0, 0) = R2;
+	refine_transform.first  = Eigen::Vector3d(t2[0], t2[1], 0.0);
+	refine_transform.second = R;
 }
 
 PositionRegistration::PositionRegistration(QWidget* parent)
@@ -464,8 +513,12 @@ void PositionRegistration::initParam()
 	_descriptorMinLen->setText("2.0");
 	_descriptorMaxLen->setText("50.0");
 	_descriptorNearNum->setText("10");
-	_disGeoVerify->setText("0.3");
-	_icpThreshold->setText("0.5");
+	// 2D tree centers have no normals, so geometric_verify uses Euclidean distance;
+	// centers can be a few decimeters off (several points per tree), so use 1.0 m.
+	_disGeoVerify->setText("1.0");
+	// Score = fraction of target trees covered. Partial overlap can cap it below 1.0
+	// (e.g. 25/51) while wrong alignments cover < 0.2; 0.3 separates them.
+	_icpThreshold->setText("0.3");
 	_bestPairsCount->setText("7");
 }
 
@@ -496,6 +549,17 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			{ logToLoggerPos(logger, tr("Error: Failed to parse source file!\n")); return; }
 		logToLoggerPos(logger, tr("Source tree centers: %1\n").arg(source_centers.cols()));
 
+		// Centre each set by its own centroid: PCL stores coordinates as 32-bit
+		// float, so UTM-scale values (~2e7 m) lose ~2 m of precision and corrupt
+		// the triangle descriptors. Small centred values keep sub-millimetre float
+		// precision; the translation is restored below.
+		Eigen::Vector2d origin_src = source_centers.rowwise().mean();
+		Eigen::Vector2d origin_tgt = target_centers.rowwise().mean();
+		Eigen::Matrix2Xd target_centers_w = target_centers;
+		target_centers_w.colwise() -= origin_tgt;
+		Eigen::Matrix2Xd source_centers_w = source_centers;
+		source_centers_w.colwise() -= origin_src;
+
 		logToLoggerPos(logger, tr("Generating triangle descriptors for target...\n"));
 		HashRegDescManager* hashReg = nullptr;
 		try { hashReg = new HashRegDescManager(config_setting); }
@@ -506,7 +570,7 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 
 		FrameInfo reference_info;
 		try {
-			hashReg->GenTriDescsFromCenters(target_centers, reference_info);
+			hashReg->GenTriDescsFromCenters(target_centers_w, reference_info);
 			hashReg->AddTriDescs(reference_info);
 		} catch (const std::exception& e) {
 			logToLoggerPos(logger, tr("Error generating target descriptors: ") + QString::fromUtf8(e.what()) + "\n");
@@ -516,7 +580,7 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 
 		logToLoggerPos(logger, tr("Generating triangle descriptors for source...\n"));
 		FrameInfo source_info;
-		try { hashReg->GenTriDescsFromCenters(source_centers, source_info); }
+		try { hashReg->GenTriDescsFromCenters(source_centers_w, source_info); }
 		catch (const std::exception& e) {
 			logToLoggerPos(logger, tr("Error generating source descriptors: ") + QString::fromUtf8(e.what()) + "\n");
 			delete hashReg; return;
@@ -546,17 +610,17 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 
 		pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 		pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-		for (int i = 0; i < source_centers.cols(); i++)
+		for (int i = 0; i < source_centers_w.cols(); i++)
 		{
-			Eigen::Vector3d pt(source_centers(0, i), source_centers(1, i), 0.0);
+			Eigen::Vector3d pt(source_centers_w(0, i), source_centers_w(1, i), 0.0);
 			pt = coarse_transform.second * pt + coarse_transform.first;
 			pcl::PointXYZ p; p.x = pt[0]; p.y = pt[1]; p.z = pt[2];
 			source_cloud->push_back(p);
 		}
-		for (int i = 0; i < target_centers.cols(); i++)
+		for (int i = 0; i < target_centers_w.cols(); i++)
 		{
 			pcl::PointXYZ p;
-			p.x = target_centers(0, i); p.y = target_centers(1, i); p.z = 0.0;
+			p.x = target_centers_w(0, i); p.y = target_centers_w(1, i); p.z = 0.0;
 			target_cloud->push_back(p);
 		}
 		logToLoggerPos(logger, tr("Source cloud: %1, Target cloud: %2\n")
@@ -580,6 +644,14 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 		refine_matrix.block<3, 1>(0, 3) = refine_transform.first;
 		final_matrix = refine_matrix * coarse_matrix;
 
+		// Restore original frames: t_true = t_centered + o_t - R * o_s.
+		{
+			Eigen::Vector3d originSrc3(origin_src[0], origin_src[1], 0.0);
+			Eigen::Vector3d originTgt3(origin_tgt[0], origin_tgt[1], 0.0);
+			Eigen::Matrix3d finalR = final_matrix.block<3, 3>(0, 0);
+			final_matrix.block<3, 1>(0, 3) += originTgt3 - finalR * originSrc3;
+		}
+
 		std::filesystem::path sourcePath(sourceFile), targetPath(targetFile);
 		std::string outFile = outputDir + "/" + sourcePath.stem().string()
 		                    + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt";
@@ -599,12 +671,19 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 		}
 		dataOut.close();
 
-		// Output best point pairs CSV
+		// Output best point pairs CSV (in the original UTM frame)
 		int numPairs = params.bestPairsCount;
 		if (numPairs > 0)
 		{
+			pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud_utm(new pcl::PointCloud<pcl::PointXYZ>);
+			for (int i = 0; i < target_centers.cols(); i++)
+			{
+				pcl::PointXYZ p;
+				p.x = target_centers(0, i); p.y = target_centers(1, i); p.z = 0.0;
+				target_cloud_utm->push_back(p);
+			}
 			pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-			kdtree.setInputCloud(target_cloud);
+			kdtree.setInputCloud(target_cloud_utm);
 
 			struct PointPair { double srcX, srcY, tgtX, tgtY, error; };
 			std::vector<PointPair> pairs;
