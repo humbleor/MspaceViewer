@@ -669,6 +669,17 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			}
 			dataOut << "\n";
 		}
+
+		// Append axis-angle rotation + translation.
+		// This is a 2D UTM registration, so the rotation is a pure rotation about +Z:
+		const double kPi = 3.14159265358979323846;
+		double angleDeg = std::atan2(final_matrix(1, 0), final_matrix(0, 0)) * 180.0 / kPi;
+		if (angleDeg < 0.0) angleDeg += 360.0;
+		dataOut << std::setprecision(4)
+		        << "rotation: (0.0000, 0.0000, 1.0000):" << angleDeg << " deg\n";
+		dataOut << std::setprecision(6)
+		        << "translation: (" << final_matrix(0, 3) << ", "
+		        << final_matrix(1, 3) << ", " << final_matrix(2, 3) << ") m\n";
 		dataOut.close();
 
 		// Output best point pairs CSV (in the original UTM frame)
