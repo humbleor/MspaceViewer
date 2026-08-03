@@ -28,6 +28,7 @@
 #include <cctype>
 #include <cstring>
 #include <vector>
+#include <limits>
 #include <zlib.h>
 
 static void logToLoggerPos(QTextEdit* logger, const QString& text)
@@ -686,41 +687,44 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 		int numPairs = params.bestPairsCount;
 		if (numPairs > 0)
 		{
-			pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud_utm(new pcl::PointCloud<pcl::PointXYZ>);
-			for (int i = 0; i < target_centers.cols(); i++)
-			{
-				pcl::PointXYZ p;
-				p.x = target_centers(0, i); p.y = target_centers(1, i); p.z = 0.0;
-				target_cloud_utm->push_back(p);
-			}
-			pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-			kdtree.setInputCloud(target_cloud_utm);
-
-			struct PointPair { double srcX, srcY, tgtX, tgtY, error; };
+			// Nearest-neighbour error is computed in double precision here: PCL's
+			// KdTreeFLANN stores pcl::PointXYZ as 32-bit float, which at UTM scale
+			// (~2e7 m) quantises coordinates to ~2 m and reports spurious 0.0 errors.
+			struct PointPair { double srcX, srcY, txX, txY, tgtX, tgtY, error; };
 			std::vector<PointPair> pairs;
 			pairs.reserve(source_centers.cols());
 
 			Eigen::Matrix3d finalRot = final_matrix.block<3, 3>(0, 0);
 			Eigen::Vector3d finalTrans = final_matrix.block<3, 1>(0, 3);
 
-			for (int i = 0; i < source_centers.cols(); i++)
+			const int ns = static_cast<int>(source_centers.cols());
+			const int nt = static_cast<int>(target_centers.cols());
+
+			for (int i = 0; i < ns; i++)
 			{
 				Eigen::Vector3d pt(source_centers(0, i), source_centers(1, i), 0.0);
 				pt = finalRot * pt + finalTrans;
-				pcl::PointXYZ query(pt[0], pt[1], 0.0);
 
-				std::vector<int> indices(1);
-				std::vector<float> sqDists(1);
-				if (kdtree.nearestKSearch(query, 1, indices, sqDists) > 0)
+				int best = -1;
+				double bestSq = std::numeric_limits<double>::max();
+				for (int j = 0; j < nt; j++)
 				{
-					PointPair pp;
-					pp.srcX = source_centers(0, i);
-					pp.srcY = source_centers(1, i);
-					pp.tgtX = target_centers(0, indices[0]);
-					pp.tgtY = target_centers(1, indices[0]);
-					pp.error = std::sqrt(sqDists[0]);
-					pairs.push_back(pp);
+					double dx = pt[0] - target_centers(0, j);
+					double dy = pt[1] - target_centers(1, j);
+					double sq = dx * dx + dy * dy;
+					if (sq < bestSq) { bestSq = sq; best = j; }
 				}
+				if (best < 0) continue;
+
+				PointPair pp;
+				pp.srcX  = source_centers(0, i);
+				pp.srcY  = source_centers(1, i);
+				pp.txX   = pt[0];
+				pp.txY   = pt[1];
+				pp.tgtX  = target_centers(0, best);
+				pp.tgtY  = target_centers(1, best);
+				pp.error = std::sqrt(bestSq);
+				pairs.push_back(pp);
 			}
 
 			std::sort(pairs.begin(), pairs.end(),
@@ -732,11 +736,12 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			std::ofstream csvOut(csvFile);
 			if (csvOut)
 			{
-				csvOut << "source_x,source_y,target_x,target_y,error\n";
+				csvOut << "source_x,source_y,transformed_x,transformed_y,target_x,target_y,error\n";
 				csvOut << std::fixed << std::setprecision(6);
 				for (int i = 0; i < writeCount; i++)
 				{
 					csvOut << pairs[i].srcX << "," << pairs[i].srcY << ","
+					       << pairs[i].txX << "," << pairs[i].txY << ","
 					       << pairs[i].tgtX << "," << pairs[i].tgtY << ","
 					       << pairs[i].error << "\n";
 				}
@@ -747,10 +752,12 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			logToLoggerPos(logger, tr("Best %1 point pairs (by registration error):\n").arg(writeCount));
 			for (int i = 0; i < writeCount; i++)
 			{
-				logToLoggerPos(logger, QString("  #%1: src(%2, %3) -> tgt(%4, %5)  err=%6\n")
+				logToLoggerPos(logger, QString("  #%1: src(%2, %3) -> tx(%4, %5) -> tgt(%6, %7)  err=%8\n")
 					.arg(i + 1)
 					.arg(pairs[i].srcX, 0, 'f', 4)
 					.arg(pairs[i].srcY, 0, 'f', 4)
+					.arg(pairs[i].txX, 0, 'f', 4)
+					.arg(pairs[i].txY, 0, 'f', 4)
 					.arg(pairs[i].tgtX, 0, 'f', 4)
 					.arg(pairs[i].tgtY, 0, 'f', 4)
 					.arg(pairs[i].error, 0, 'f', 6));
