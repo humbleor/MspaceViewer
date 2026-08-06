@@ -1255,7 +1255,8 @@ void HashRegDescManager::build_stdesc(FrameInfo &curr_frame_info)
                         l2 = l_temp;
                     }
 
-                    UNI_VOXEL_LOC position((int64_t)d_p.x, (int64_t)d_p.y, (int64_t)d_p.z);
+                    // Deduplicate by the SORTED side lengths
+                    UNI_VOXEL_LOC position((int64_t)(a * 1000), (int64_t)(b * 1000), (int64_t)(c * 1000));
                     auto iter = feat_map.find(position);
                     Eigen::Vector3d normal_1, normal_2, normal_3;
                     // whether have equal length triangle, make sure the triangle is unique

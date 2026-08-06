@@ -683,6 +683,31 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 		        << final_matrix(1, 3) << ", " << final_matrix(2, 3) << ") m\n";
 		dataOut.close();
 
+		// Output the transformed source tree centers in the target UTM frame.
+		// already aligned — no matrix needs to be applied by the user, which
+		// avoids the UTM-scale precision/global-shift pitfalls of the matrix.
+		{
+			Eigen::Matrix3d finalR = final_matrix.block<3, 3>(0, 0);
+			Eigen::Vector3d finalT = final_matrix.block<3, 1>(0, 3);
+			std::string csvFile = outputDir + "/" + sourcePath.stem().string()
+			                    + "_to_" + targetPath.stem().string() + "_transformedSource.csv";
+			std::ofstream csvOut(csvFile);
+			if (csvOut)
+			{
+				csvOut << "id,x,y\n";
+				csvOut << std::fixed << std::setprecision(6);
+				for (int i = 0; i < source_centers.cols(); i++)
+				{
+					Eigen::Vector3d pt(source_centers(0, i), source_centers(1, i), 0.0);
+					pt = finalR * pt + finalT;
+					csvOut << source_ids[i] << "," << pt[0] << "," << pt[1] << "\n";
+				}
+				csvOut.close();
+				logToLoggerPos(logger, tr("Transformed source tree centers saved to: ")
+					+ QString::fromStdString(csvFile) + "\n");
+			}
+		}
+
 		// Output best point pairs CSV (in the original UTM frame)
 		int numPairs = params.bestPairsCount;
 		if (numPairs > 0)
