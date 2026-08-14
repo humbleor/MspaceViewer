@@ -1,4 +1,5 @@
 #include "../include/MainWindow.h"
+#include "../include/RunFuture.h"
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <QtWidgets/QProgressBar>
@@ -94,18 +95,19 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
         const std::string baseTmp = (QCoreApplication::applicationDirPath() + "/tmp/").toStdString();
         const std::string outDir = baseTmp + std::filesystem::path(inputFiles).stem().string();
 
-        QFuture<void> future = QtConcurrent::run(std::bind(&FormSettings::loadFiles, _formSettings, inputfile, outDir, inputFileNode));
-        while (!future.isFinished())
-        {
-            if (pDlg)
-            {
-                pDlg->setValue(pDlg->value() + 1);
-                QApplication::processEvents();
-            }
-        }
+        // Heavy parse/octree/optimize work runs on the thread pool; the scene-graph
+        // addChild + camera framing happens back on the GUI thread (finalizeNode).
+        auto formSettings = _formSettings;
+        QFuture<bool> future = QtConcurrent::run([formSettings, inputfile, outDir, inputFileNode]() {
+            return formSettings->loadFiles(inputfile, outDir, inputFileNode);
+        });
+        runFutureBlocking(future);
+        bool loaded = future.result();
+        if (loaded)
+            _formSettings->finalizeNode(inputFileNode);
 
         // 确认节点确实加载到了场景
-        if (!inputFileNode.valid() || inputFileNode->getNumChildren() == 0)
+        if (!loaded || !inputFileNode.valid() || inputFileNode->getNumChildren() == 0)
         {
             ui._Logger->insertPlainText(tr("Point cloud not loaded into scene (check plugins/resources)!") + "\n");
             return;

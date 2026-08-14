@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <osgViewer/Viewer>
 #include <osg/Node>
@@ -31,8 +31,10 @@ public:
     //设置背景色
     const osg::Vec4& getBackGroundColor();
     void setBackGroundColor(osg::Vec4 backGroundColor);
-    //加载文件
-    void loadFiles(std::vector<std::string> inputFiles, std::string outputFile, osg::ref_ptr<osg::MSpaceNode> inputFileNode);
+    //加载文件（在工作线程执行；返回是否成功。场景挂载与相机取景由 finalizeNode 在主线程完成）
+    bool loadFiles(std::vector<std::string> inputFiles, std::string outputFile, osg::ref_ptr<osg::MSpaceNode> inputFileNode);
+    //将已加载的节点挂载到场景并调整相机取景（必须在 GUI/渲染线程调用）
+    void finalizeNode(osg::ref_ptr<osg::MSpaceNode> inputFileNode);
     //显示树木提取评价结果点图
     //void showMatchingNode(osg::ref_ptr<osg::Group> inputNode, std::vector<string> IDOfExt, std::vector<std::vector<double>> postionOfExt,std::vector<string> IDOfRef, std::vector<std::vector   <double>> postionOfRef, std::vector<std::pair<size_t, size_t>> trueMatching, std::vector<size_t> resOfExt, std::vector<size_t> resOFRef);
     //删除节点

@@ -23,6 +23,20 @@ vector<vector<int>> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::
 	vector<vector<int>> rhombus_indices(num_sectors);
 	size_t npts = cloud->points.size();
 
+	// Precompute polar angle (degrees) and radius once per point. They were
+	// previously recomputed for every point in every sector iteration.
+	vector<float> theta_deg(npts);
+	vector<float> r_pts(npts);
+	for (size_t pt_idx = 0; pt_idx < npts; ++pt_idx)
+	{
+		const pcl::PointXYZ& point = cloud->points[pt_idx];
+		float theta = atan2f(point.y, point.x);
+		float r = sqrtf(point.x * point.x + point.y * point.y);
+		if (theta < 0) theta += 2.f * M_PI;
+		theta_deg[pt_idx] = theta / M_PI * 180.f;
+		r_pts[pt_idx] = r;
+	}
+
 	for (size_t i = 0; i < static_cast<size_t>(num_sectors / 3); i++)
 	{
 		const float end_num1 = 360.0f / num_sectors * i + 120.f;
@@ -55,12 +69,9 @@ vector<vector<int>> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::
 		for (int pt_idx = 0; pt_idx < static_cast<int>(npts); ++pt_idx)
 		{
 			const pcl::PointXYZ& point = cloud->points[pt_idx];
-			float theta = atan2f(point.y, point.x);
-			float r = sqrtf(point.x * point.x + point.y * point.y);
+			float r = r_pts[pt_idx];
 			if (r > R) continue;
-
-			if (theta < 0) theta += 2.f * M_PI;
-			theta = theta / M_PI * 180.f;
+			float theta = theta_deg[pt_idx];
 
 			if (360.0f / num_sectors * i <= theta && theta <= end_num1)
 			{
@@ -108,12 +119,9 @@ vector<vector<int>> compute_rhombus_pointclouds(pcl::PointCloud<pcl::PointXYZ>::
 			for (int pt_idx = 0; pt_idx < static_cast<int>(npts); ++pt_idx)
 			{
 				const pcl::PointXYZ& point = cloud->points[pt_idx];
-				float theta = atan2f(point.y, point.x);
-				float r = sqrtf(point.x * point.x + point.y * point.y);
+				float r = r_pts[pt_idx];
 				if (r > R) continue;
-
-				if (theta < 0) theta += 2.f * M_PI;
-				theta = theta / M_PI * 180.f;
+				float theta = theta_deg[pt_idx];
 
 				if ((ang_lo <= theta && theta < 360.f) || (0.f <= theta && theta <= ang_hi))
 				{

@@ -1,5 +1,6 @@
 #include "../include/RegistrationForm_TLS.h"
 #include "../include/PointCloudLoader.h"
+#include "../include/RunFuture.h"
 
 static void logToLogger(QTextEdit* logger, const QString& text)
 {
@@ -98,14 +99,7 @@ void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextE
 		progress->raise();
 	}
 	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationForm_TLS::registration, this, params, logger));
-	while (!future.isFinished())
-	{
-		if (progress)
-		{
-			progress->setValue(progress->value() + 1);
-			QApplication::processEvents();
-		}
-	}
+	runFutureBlocking(future);
 }
 
 void RegistrationForm_TLS::apply()
@@ -132,8 +126,6 @@ void RegistrationForm_TLS::initParam()
 	_pointsConstrain->setText("20");
 	_zConstrain->setText("0.2");
 }
-
-#include "../include/PointCloudLoader.h"
 
 void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 {

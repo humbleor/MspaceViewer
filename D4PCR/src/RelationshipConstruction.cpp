@@ -247,6 +247,7 @@ void RelationshipConstruction::correspondenceConstruction(FPFHPtr fpfhCloudS, FP
 	corr_estimation.setInputSource(fpfhCloudS);
 	corr_estimation.setInputTarget(fpfhCloudT);
 	corr_estimation.determineReciprocalCorrespondences(fpfhCor);
+	correspondences.reserve(fpfhCor.size() + 5 * fpfhCloudS->size());
 	for (size_t i = 0; i < fpfhCor.size(); i++)
 	{
 		pcl::Correspondence cor;
@@ -260,16 +261,17 @@ void RelationshipConstruction::correspondenceConstruction(FPFHPtr fpfhCloudS, FP
 	treeS.setInputCloud(fpfhCloudS);
 	pcl::search::KdTree<pcl::FPFHSignature33> treeT;
 	treeT.setInputCloud(fpfhCloudT);
+	// Reuse scratch vectors across iterations (nearestKSearch overwrites them).
+	std::vector<int> corrIdxTmp(5);
+	std::vector<float> corrDisTmp(5);
+	std::vector<int> corrIdxTmpT(5);
+	std::vector<float> corrDisTmpT(5);
 	for (size_t i = 0; i < fpfhCloudS->size(); i++) {
-		std::vector<int> corrIdxTmp(5);
-		std::vector<float> corrDisTmp(5);
 		//find the best n matches in target fpfh
 		treeT.nearestKSearch(*fpfhCloudS, i, 5, corrIdxTmp, corrDisTmp);
 		for (size_t j = 0; j < corrIdxTmp.size(); j++) {
 			bool removeFlag = true;
 			int searchIdx = corrIdxTmp[j];
-			std::vector<int> corrIdxTmpT(5);
-			std::vector<float> corrDisTmpT(5);
 			treeS.nearestKSearch(*fpfhCloudT, searchIdx, 5, corrIdxTmpT, corrDisTmpT);
 			for (size_t k = 0; k < 5; k++) {
 				if (corrIdxTmpT.data()[k] == i) {

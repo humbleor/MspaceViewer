@@ -1,4 +1,5 @@
 #include "../include/RegistrationForm_ULS.h"
+#include "../include/RunFuture.h"
 
 static void logToLoggerULS(QTextEdit* logger, const QString& text)
 {
@@ -115,14 +116,7 @@ void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* 
 		progress->raise();
 	}
 	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationULS::registration, this, params, logger));
-	while (!future.isFinished())
-	{
-		if (progress)
-		{
-			progress->setValue(progress->value() + 1);
-			QApplication::processEvents();
-		}
-	}
+	runFutureBlocking(future);
 }
 
 void RegistrationULS::initParam()

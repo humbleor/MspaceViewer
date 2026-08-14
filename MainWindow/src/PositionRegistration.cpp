@@ -1,4 +1,5 @@
 #include "../include/PositionRegistration.h"
+#include "../include/RunFuture.h"
 #include <QScrollBar>
 
 // Forest_TLS_Reg headers
@@ -501,10 +502,7 @@ void PositionRegistration::executeRegistration(QProgressDialog* progress, QTextE
 	QFuture<void> future = QtConcurrent::run([self, params, logger]() {
 		self->registration(params, logger);
 	});
-	while (!future.isFinished())
-	{
-		if (progress) { progress->setValue(progress->value() + 1); QApplication::processEvents(); }
-	}
+	runFutureBlocking(future);
 }
 
 void PositionRegistration::apply()  { this->done(QDialog::Accepted); }

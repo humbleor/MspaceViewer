@@ -832,8 +832,9 @@ namespace chunker_countsort_laszip {
 				return index;
 			};
 			
-			// COUNT POINTS PER BUCKET计算每个节点node有多少个点
-			vector<int64_t> counts(nodes.size(), 0);
+			// Compute each point's grid->node index once and reuse it in both passes
+			// below (previously the full toIndex + grid lookup ran twice per point).
+			vector<int64_t> pointNodeIndex(batchSize);
 			for (int64_t i = 0; i < batchSize; i++) {
 				auto index = toIndex(i * bpp);
 
@@ -844,7 +845,13 @@ namespace chunker_countsort_laszip {
 					exit(123);
 				}
 
-				counts[nodeIndex]++;
+				pointNodeIndex[i] = nodeIndex;
+			}
+
+			// COUNT POINTS PER BUCKET计算每个节点node有多少个点
+			vector<int64_t> counts(nodes.size(), 0);
+			for (int64_t i = 0; i < batchSize; i++) {
+				counts[pointNodeIndex[i]]++;
 			}
 
 			// ALLOCATE BUCKETS为每个节点分配存储需要的点时所需的空间
@@ -861,10 +868,7 @@ namespace chunker_countsort_laszip {
 			for (int64_t i = 0; i < batchSize; i++) {
 				int64_t pointOffset = i * bpp;
 
-				auto index = toIndex(pointOffset);
-
-				auto nodeIndex = grid[index];
-				auto& node = nodes[nodeIndex];
+				auto nodeIndex = pointNodeIndex[i];
 
 				if (nodeIndex == previousNodeIndex) {
 					previousBucket->write(&data[0] + pointOffset, bpp);

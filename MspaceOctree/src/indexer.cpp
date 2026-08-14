@@ -860,10 +860,17 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 		return index;
 	};
 
+	// Compute each point's grid index once and reuse it in both passes below,
+	// avoiding the previous double computation (two double-division + morton
+	// encodes per point).
+	vector<int64_t> pointGridIndex(numPoints);
+	for (int64_t i = 0; i < numPoints; i++) {
+		pointGridIndex[i] = gridIndexOf(i);
+	}
+
 	// COUNTING
 	for (int64_t i = 0; i < numPoints; i++) {
-		auto index = gridIndexOf(i);
-		counters[index]++;
+		counters[pointGridIndex[i]]++;
 	}
 
 	//将节点的点整理到points中
@@ -876,8 +883,7 @@ void buildHierarchy(Indexer* indexer, Node* node, shared_ptr<Buffer> points, int
 		Buffer tmp(numPoints * bpp);
 
 		for (int64_t i = 0; i < numPoints; i++) {
-			auto index = gridIndexOf(i);
-			auto targetIndex = offsets[index]++;
+			auto targetIndex = offsets[pointGridIndex[i]]++;
 
 			memcpy(tmp.data_u8 + targetIndex * bpp, points->data_u8 + i * bpp, bpp);
 		}

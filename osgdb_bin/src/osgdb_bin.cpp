@@ -54,7 +54,22 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
     int bpp = stoi(fileinformation[2]);
     int numpoints = buffer.size() / bpp;
 
+    // These 8 per-chunk fields are constant: parse them once instead of re-parsing
+    // them for every point (~8 locale string conversions per point previously).
+    double posscalex = stod(fileinformation[3]);
+    double posscaley = stod(fileinformation[4]);
+    double posscalez = stod(fileinformation[5]);
+    double posoffsetx = stod(fileinformation[6]);
+    double posoffsety = stod(fileinformation[7]);
+    double posoffsetz = stod(fileinformation[8]);
+    bool hascolor = stoi(fileinformation[9]) != 0;
+    int64_t rgbOffset = hascolor ? stoull(fileinformation[10]) : 0;
 
+    if (numpoints > 0)
+    {
+        _coordinates->reserve(static_cast<size_t>(numpoints));
+        _colors->reserve(static_cast<size_t>(numpoints));
+    }
 
     for (int64_t i = 0; i < numpoints; i++) {
         int64_t pointoffset = i * bpp;
@@ -63,27 +78,16 @@ osgDB_bin::ReadResult osgDB_bin::readNode(const std::string& fileName, const osg
         int32_t iy = read<int32_t>(buffer, pointoffset + 4);
         int32_t iz = read<int32_t>(buffer, pointoffset + 8);
 
-        double posscalex = stod(fileinformation[3]);
-        double posscaley = stod(fileinformation[4]);
-        double posscalez = stod(fileinformation[5]);
-
-        double posoffsetx = stod(fileinformation[6]);
-        double posoffsety = stod(fileinformation[7]);
-        double posoffsetz = stod(fileinformation[8]);
-
         double x = double(ix) * posscalex + posoffsetx;
         double y = double(iy) * posscaley + posoffsety;
         double z = double(iz) * posscalez + posoffsetz;
         _coordinates->push_back(osg::Vec3(x, y, z));
         float r, g, b;
-        bool hascolor = stoi(fileinformation[9]);
         if (hascolor)
         {
-            int64_t rgbOffset = stoull(fileinformation[10]);
             r = (float)read<uint16_t>(buffer, pointoffset + rgbOffset + 0) / 255 / 255;
             g = (float)read<uint16_t>(buffer, pointoffset + rgbOffset + 2) / 255 / 255;
             b = (float)read<uint16_t>(buffer, pointoffset + rgbOffset + 4) / 255 / 255;
-
         }
         else
         {

@@ -109,7 +109,11 @@ struct SamplerPoisson : public Sampler {
 
 			unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-			thread_local vector<Point> dbgAccepted(1'000'000);
+			// Thread-local scratch buffer, sized on demand to the largest node seen
+			// (previously fixed at 1,000,000 elements => ~48 MB per sampling thread).
+			thread_local vector<Point> dbgAccepted;
+			if (dbgAccepted.size() < points.size())
+				dbgAccepted.resize(points.size());
 			int64_t dbgNumAccepted = 0;
 			double spacing = baseSpacing / pow(2.0, node->level());
 			double squaredSpacing = spacing * spacing;

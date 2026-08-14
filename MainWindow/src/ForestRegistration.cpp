@@ -1,4 +1,5 @@
 #include "../include/ForestRegistration.h"
+#include "../include/RunFuture.h"
 #include <QScrollBar>
 
 // Forest_TLS_Reg headers
@@ -128,14 +129,7 @@ void ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdi
 	QFuture<void> future = QtConcurrent::run([self, params, logger]() {
 		self->registration(params, logger);
 	});
-	while (!future.isFinished())
-	{
-		if (progress)
-		{
-			progress->setValue(progress->value() + 1);
-			QApplication::processEvents();
-		}
-	}
+	runFutureBlocking(future);
 }
 
 void ForestRegistration::apply()

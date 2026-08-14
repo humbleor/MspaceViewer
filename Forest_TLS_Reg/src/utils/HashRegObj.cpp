@@ -1520,7 +1520,6 @@ void HashRegDescManager::candidate_frames_verify( const FrameInfo &curr_frame,
         index[i] = i;
     }
     
-    std::mutex mylock;
     // loop the selected triangles in match list, num is use_size
     #pragma omp parallel for num_threads(8)
     for (int i = 0; i < (int)use_size; i++) 
@@ -1551,9 +1550,8 @@ void HashRegDescManager::candidate_frames_verify( const FrameInfo &curr_frame,
                 vote++;
             }
         }
-        mylock.lock();
+        // Each i writes a distinct vote_list[i], so no lock is needed here.
         vote_list[i] = vote;
-        mylock.unlock();
     }
     // find the max votes and the corresponding index 
     int max_vote_index = 0;
@@ -1722,7 +1720,7 @@ void HashRegDescManager::triangle_solver(std::pair<TriDesc, TriDesc> &std_pair,
     }
     else
     {
-        Eigen::JacobiSVD<Eigen::MatrixXd> svd(covariance, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        Eigen::JacobiSVD<Eigen::Matrix3d> svd(covariance, Eigen::ComputeThinU | Eigen::ComputeThinV);
         Eigen::Matrix3d V = svd.matrixV();
         Eigen::Matrix3d U = svd.matrixU();
         // calculate the Rot and Trans

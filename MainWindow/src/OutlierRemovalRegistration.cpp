@@ -1,4 +1,5 @@
 #include "../include/OutlierRemovalRegistration.h"
+#include "../include/RunFuture.h"
 
 static void logToLoggerORR(QTextEdit* logger, const QString& text)
 {
@@ -90,14 +91,7 @@ void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, 
 		progress->raise();
 	}
 	QFuture<void> future = QtConcurrent::run(std::bind(&OutlierRemovalRegistration::registration, this, params, logger));
-	while (!future.isFinished())
-	{
-		if (progress)
-		{
-			progress->setValue(progress->value() + 1);
-			QApplication::processEvents();
-		}
-	}
+	runFutureBlocking(future);
 }
 
 void OutlierRemovalRegistration::apply()
