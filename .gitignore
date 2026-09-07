@@ -8,3 +8,4 @@ test/*.png
 .mimocode/
 CLAUDE.md
 DEVLOG.md
+run/

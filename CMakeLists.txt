@@ -189,12 +189,78 @@ add_subdirectory(ULS-TLS)
 add_subdirectory(D4PCR)
 add_subdirectory(MainWindow)
 
-# ── D4PCR CLI tool (outlier removal registration) ──
-add_executable(OutlierRemovalRegCLI ${CMAKE_SOURCE_DIR}/cli/OutlierRemovalRegCLI.cpp)
-target_link_libraries(OutlierRemovalRegCLI D4PCR ${PCL_LIBRARIES} Eigen3::Eigen)
-set_target_properties(OutlierRemovalRegCLI PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
+# ── Optional CLI tools ──
+option(BUILD_CLI_TOOLS "Build command-line registration tools" OFF)
+
+if(BUILD_CLI_TOOLS)
+    # ── D4PCR CLI tool (outlier removal registration) ──
+    add_executable(OutlierRemovalRegCLI ${CMAKE_SOURCE_DIR}/cli/OutlierRemovalRegCLI.cpp)
+    target_link_libraries(OutlierRemovalRegCLI D4PCR ${PCL_LIBRARIES} Eigen3::Eigen)
+    set_target_properties(OutlierRemovalRegCLI PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+
+    # ── TLSRegistration CLI tool (TLS↔TLS diamond + FPFH + ICP) ──
+    add_executable(TLSRegistrationCLI ${CMAKE_SOURCE_DIR}/cli/TLSRegistrationCLI.cpp)
+    target_include_directories(TLSRegistrationCLI PRIVATE
+        ${CMAKE_SOURCE_DIR}/MainWindow/include
+        ${libLAS_INCLUDE_DIR}
+        ${PCL_INCLUDE_DIRS}
+    )
+    target_link_libraries(TLSRegistrationCLI
+        TLSRegistration
+        ${PCL_LIBRARIES}
+        Eigen3::Eigen
+        ${libLAS_LIBRARY}
+        Boost::boost
+    )
+    set_target_properties(TLSRegistrationCLI PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+
+    # ── ForestReg CLI tool (HashRegDescManager coarse + small_gicp fine) ──
+    # Mirrors MainWindow/src/ForestRegistration.cpp minus Qt. Compiles the same
+    # FOREST_REG_SOURCES that MainWindow bundles so the algorithm stays in sync.
+    add_executable(ForestRegCLI ${CMAKE_SOURCE_DIR}/cli/ForestRegCLI.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Hlp.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/HashRegObj.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/GenAlg.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Point2img.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/FEC.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/CSF.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Cloth.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Constraint.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Particle.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/Rasterization.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/XYZReader.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/point_cloud.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src/c2cdist.cpp
+    )
+    target_include_directories(ForestRegCLI PRIVATE
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include/utils
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include/dst
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src
+        ${libLAS_INCLUDE_DIR}
+        ${PCL_INCLUDE_DIRS}
+        ${PCL_ROOT}/3rdParty/FLANN/include
+        ${OpenCV_INCLUDE_DIRS}
+    )
+    target_link_libraries(ForestRegCLI
+        PCL::common PCL::io PCL::filters PCL::features PCL::registration PCL::search PCL::kdtree PCL::segmentation
+        Eigen3::Eigen
+        opencv_world
+        ${libLAS_LIBRARY}
+        ${libLAS_C_LIBRARY}
+        Boost::regex Boost::serialization
+        small_gicp
+        OpenMP::OpenMP_CXX
+    )
+    set_target_properties(ForestRegCLI PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 
 # ═══════════════════════════════════════════════════
 # CMake Install + CPack

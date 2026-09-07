@@ -179,12 +179,18 @@ vcpkg 会自动安装以下依赖（见 `vcpkg.json`）：
 
 ```bash
 cd E:/Code/MspaceViewer
-mkdir build
 
-# 配置 CMake（使用 vcpkg toolchain）
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release
+# 1. 配置并生成 Visual Studio 工程（默认不编译 CLI 工具）
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=OFF
 
-# 编译 Release 版本
+# 2. 编译 Release 主程序
+cmake --build build --config Release
+```
+
+默认 `BUILD_CLI_TOOLS=OFF`，只生成主程序及其依赖库，不生成 `OutlierRemovalRegCLI`、`TLSRegistrationCLI` 和 `ForestRegCLI`。需要编译 CLI 工具时，重新配置并设置为 `ON`：
+
+```bash
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=ON
 cmake --build build --config Release
 ```
 
@@ -194,9 +200,11 @@ cmake --build build --config Release
 # 仅编译主程序
 cmake --build build --config Release --target MspaceViewer
 
-# 编译全部模块
+# 编译当前配置中启用的全部目标
 cmake --build build --config Release
 ```
+
+主程序输出路径：`build/bin/Release/MspaceViewer.exe`。
 
 ### 使用 Visual Studio
 
