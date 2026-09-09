@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>450</width>
-    <height>320</height>
+    <width>600</width>
+    <height>420</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -72,23 +72,83 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_3">
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_4">
+       <layout class="QHBoxLayout" name="horizontalLayout_params1">
         <item>
-         <widget class="QLabel" name="label_3">
+         <widget class="QLabel" name="label_minLen">
           <property name="text">
-           <string>配置文件：</string>
+           <string>三角形最短边(m)：</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="_configFile"/>
+         <widget class="QLineEdit" name="_descriptorMinLen"/>
         </item>
         <item>
-         <widget class="QPushButton" name="_selectConfigFile">
+         <widget class="QLabel" name="label_maxLen">
           <property name="text">
-           <string>选择文件</string>
+           <string>三角形最长边(m)：</string>
           </property>
          </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="_descriptorMaxLen"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_nearNum">
+          <property name="text">
+           <string>K近邻数：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="_descriptorNearNum"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_params2">
+        <item>
+         <widget class="QLabel" name="label_disGeo">
+          <property name="text">
+           <string>几何验证距离(m)：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="_disGeoVerify"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_icpTh">
+          <property name="text">
+           <string>匹配成功率阈值：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="_icpThreshold"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_normalGeo">
+          <property name="text">
+           <string>法向量差异阈值：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="_normalGeoVerify"/>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_params2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
         </item>
        </layout>
       </item>

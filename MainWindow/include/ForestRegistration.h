@@ -15,8 +15,13 @@
 struct ForestRegParams {
 	QString sourceFile;
 	QString targetFile;
-	QString configFile;
 	QString outputDir;
+	double descriptorNearNum = 10.0;
+	double descriptorMinLen = 2.0;
+	double descriptorMaxLen = 50.0;
+	double disGeoVerify = 0.3;
+	double icpThreshold = 0.3;
+	double normalGeoVerify = 1.0;
 };
 
 class ForestRegistration :public QDialog, public Ui::ForestRegistration, public std::enable_shared_from_this<ForestRegistration>
@@ -33,7 +38,6 @@ private slots:
 	void reject();
 	void selectInputFileOfSource();
 	void selectInputFileOfTarget();
-	void selectConfigFile();
 	void selectOutputDir();
 
 private:

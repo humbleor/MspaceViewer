@@ -7,5 +7,6 @@ test/*.png
 .claude/
 .mimocode/
 CLAUDE.md
+AGENTS.md
 DEVLOG.md
 run/

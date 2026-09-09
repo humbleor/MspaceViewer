@@ -44,7 +44,6 @@ ForestRegistration::ForestRegistration(QWidget* parent)
 
 	connect(_selectInputFileOfSource, &QPushButton::clicked, this, &ForestRegistration::selectInputFileOfSource);
 	connect(_selectInputFileOfTarget, &QPushButton::clicked, this, &ForestRegistration::selectInputFileOfTarget);
-	connect(_selectConfigFile, &QPushButton::clicked, this, &ForestRegistration::selectConfigFile);
 	connect(_selectOutputDir, &QPushButton::clicked, this, &ForestRegistration::selectOutputDir);
 	connect(_action_OK, &QPushButton::clicked, this, &ForestRegistration::apply);
 	connect(_action_cancel, &QPushButton::clicked, this, &ForestRegistration::reject);
@@ -84,16 +83,6 @@ void ForestRegistration::selectInputFileOfTarget()
 	_inputFileOfTarget->setText(file);
 }
 
-void ForestRegistration::selectConfigFile()
-{
-	QStringList fileTypes;
-	fileTypes << "YAML Files (*.yaml)";
-	QString file = QFileDialog::getOpenFileName(this, tr("Select Config File"), "", fileTypes.join(";;"));
-	if (file.isEmpty())
-		return;
-	_configFile->setText(file);
-}
-
 void ForestRegistration::selectOutputDir()
 {
 	QString dir = QFileDialog::getExistingDirectory(this, tr("Select Output Directory"), "");
@@ -112,8 +101,13 @@ void ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdi
 	ForestRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
 	params.targetFile = _inputFileOfTarget->text();
-	params.configFile = _configFile->text().isEmpty() ? "" : _configFile->text();
 	params.outputDir = _outputFileOfDir->text();
+	params.descriptorNearNum = _descriptorNearNum->text().toDouble();
+	params.descriptorMinLen  = _descriptorMinLen->text().toDouble();
+	params.descriptorMaxLen  = _descriptorMaxLen->text().toDouble();
+	params.disGeoVerify      = _disGeoVerify->text().toDouble();
+	params.icpThreshold      = _icpThreshold->text().toDouble();
+	params.normalGeoVerify   = _normalGeoVerify->text().toDouble();
 
 	if (progress)
 	{
@@ -144,7 +138,12 @@ void ForestRegistration::reject()
 
 void ForestRegistration::initParam()
 {
-	_configFile->setText("");
+	_descriptorNearNum->setText("10");
+	_descriptorMinLen->setText("2.0");
+	_descriptorMaxLen->setText("50.0");
+	_disGeoVerify->setText("0.3");
+	_icpThreshold->setText("0.3");
+	_normalGeoVerify->setText("1.0");
 }
 
 void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
@@ -153,19 +152,21 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 		std::string sourceFile = params.sourceFile.toStdString();
 		std::string targetFile = params.targetFile.toStdString();
 		std::string outputDir = params.outputDir.toStdString();
-		std::string configFile = params.configFile.toStdString();
 
-		// --- Step 1: Load config settings ---
+		// --- Step 1: Build config settings from UI values ---
 		ConfigSetting config_setting;
-		if (!configFile.empty())
-		{
-			logToLoggerForest(logger, tr("Loading config file: ") + QString::fromStdString(configFile) + "\n");
-			ReadParas(configFile, config_setting);
-		}
-		else
-		{
-			logToLoggerForest(logger, tr("No config file provided, using default parameters.\n"));
-		}
+		config_setting.descriptor_near_num  = static_cast<int>(params.descriptorNearNum);
+		config_setting.descriptor_min_len   = params.descriptorMinLen;
+		config_setting.descriptor_max_len   = params.descriptorMaxLen;
+		config_setting.dis_geo_verify       = params.disGeoVerify;
+		config_setting.icp_threshold       = params.icpThreshold;
+		config_setting.normal_geo_verify   = params.normalGeoVerify;
+		// ponytail: these three defaults differ between DST.h and all 8 known forest datasets;
+		// pin to the dataset-common value so registration doesn't silently fail on defaults.
+		config_setting.rough_dis_threshold        = 0.03;
+		config_setting.dist_candi_frames_verify   = 1.0;
+		config_setting.use_matched_num            = 4000;
+		logToLoggerForest(logger, tr("Using UI parameters (no config file loaded).\n"));
 
 		// --- Step 2: Load point clouds ---
 		// Helper lambda: load point cloud by file extension
