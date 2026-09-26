@@ -8,7 +8,7 @@ MspaceViewer 是一款面向激光扫描（LiDAR）点云数据的桌面应用�
 
 ### 核心功能
 
-- **点云加载与可视化**：支持 LAS/LAZ 格式点云文件，通过分层八叉树结构实现高效的 LOD（多细节层次）渲染
+- **点云加载与可视化**：支持 LAS/LAZ/PCD/PLY 格式点云文件（PCD/PLY 会先转换为 LAS），通过分层八叉树结构实现 LOD（多细节层次）渲染
 - **TLS-TLS 配准**：基于菱形描述子与 FPFH 特征匹配的地面激光扫描点云配准
 - **ULS-TLS 配准**：基于 PCA 描述子与极坐标离散化的无人机到地面点云配准
 - **D4PCR 离群值鲁棒配准**：使用区间 stabbing 算法实现高离群值比例下的 4DOF 配准
@@ -23,25 +23,25 @@ MspaceViewer 是一款面向激光扫描（LiDAR）点云数据的桌面应用�
 系统采用模块化 C++ 架构，基于 Qt 构建 GUI，通过 OpenSceneGraph 实现三维渲染，PCL 提供点云算法支持。
 
 ```text
-┌────────────────────────────────────────────────────────────┐
-│                      MainWindow (Qt GUI)                    │
-│  ┌──────────────┐  ┌───────────────┐  ┌────────────────┐  │
-│  │ 数据管理树视图 │  │ osgQOpenGLWidget│  │ 配准对话框     │  │
-│  │ (QStandardItem)│  │ (OSG 渲染视图) │  │ TLS/ULS/D4PCR/│  │
-│  │              │  │               │  │ PosReg        │  │
-│  └──────┬───────┘  └───────┬───────┘  └───────┬────────┘  │
-│         │                  │                  │             │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-          ▼                  ▼                  ▼
-┌─────────────────┐ ┌───────────────┐ ┌──────────────────────┐
-│  MspaceOctree   │ │   osgQt       │ │ 配准算法模块          │
-│  八叉树数据结构  │ │ Qt-OSG 集成层  │ │ TLSRegistration      │
-│  LAS/LAZ→Octree │ │ 渲染线程管理   │ │ ULS-TLS              │
-│  Poisson/Random │ └───────────────┘ │ D4PCR                │
-│  采样           │                   │ Forest_TLS_Reg       │
-│                 │                   │ PositionRegistration  │
-└─────────────────┘                   └──────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      MainWindow (Qt GUI)                     │
+│  ┌────────────────┐  ┌─────────────────┐  ┌────────────────┐ │
+│  │ 数据管理树视图  │  │ osgQOpenGLWidget│  │ 配准对话框      │ │
+│  │ (QStandardItem)│  │ (OSG 渲染视图)   │  │ TLS/ULS/D4PCR/ │ │
+│  │                │  │                 │  │ PosReg         │ │
+│  └──────┬─────────┘  └───────┬─────────┘  └───────┬────────┘ │
+│         │                    │                    │          │
+└─────────┼────────────────────┼────────────────────┼──────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+┌─────────────────┐   ┌───────────────┐ ┌──────────────────────┐
+│  MspaceOctree   │   │   osgQt       │ │ 配准算法模块          │
+│  八叉树数据结构  │   │ Qt-OSG 集成层  │ │ TLSRegistration      │
+│  LAS/LAZ→Octree │   │ 渲染线程管理   │ │ ULS-TLS              │
+│  Poisson/Random │   └───────────────┘ │ D4PCR                │
+│  采样           │                     │ Forest_TLS_Reg       │
+│                 │                     │ PositionRegistration │
+└─────────────────┘                     └──────────────────────┘
 ```
 
 ### 目录结构
@@ -69,7 +69,7 @@ MspaceViewer/
 ├── TLSRegistration/            # TLS-TLS 配准算法
 ├── ULS-TLS/                    # ULS-TLS 配准算法
 ├── D4PCR/                      # D4PCR 离群值鲁棒配准
-└── Forest_TLS_Reg/             # 森林场景配准（small_gicp + GTSAM）
+└── Forest_TLS_Reg/             # 森林场景配准（描述符匹配 + small_gicp）
     └── thirdParty/
         ├── small_gicp/         # small_gicp 库
         └── CSF-master/         # Cloth Simulation Filter
@@ -80,13 +80,13 @@ MspaceViewer/
 | 模块 | 职责 |
 |------|------|
 | **MainWindow** | 主窗口与 UI 交互，数据管理树视图、配准对话框、多语言切换 |
-| **MspaceOctree** | LAS/LAZ 文件转换为分层八叉树格式，支持 `MSpaceOCTree` 构建与 `MSpaceNode` LOD 渲染节点 |
+| **MspaceOctree** | LAS/LAZ/PCD/PLY 文件转换为分层八叉树格式，支持 `MSpaceOCTree` 构建与 `MSpaceNode` LOD 渲染节点 |
 | **osgQt** | Qt 与 OpenSceneGraph 的桥接层，实现 QOpenGLWidget 内嵌 OSG 渲染 |
 | **osgdb_bin** | OSG 数据库插件，用于读取二进制格式的点云数据 |
 | **TLSRegistration** | TLS-TLS 配准算法：菱形描述子提取、FPFH 特征匹配 |
 | **ULS-TLS** | `RegistrationU2T` 类：GridMinimum 滤波、PCA 描述子筛选、Z 值极坐标离散化估计旋转角 |
 | **D4PCR** | `Decoupling` 类：区间 stabbing 算法，针对高离群值比例的鲁棒 4DOF 配准 |
-| **Forest_TLS_Reg** | 基于三角形描述符哈希表的森林场景点云配准（small_gicp + GTSAM），含 CSF 地面滤波；`GenTriDescsFromCenters` 支持从 2D 坐标直接生成描述符 |
+| **Forest_TLS_Reg** | 基于三角形描述符哈希表的森林场景点云粗配准与 small_gicp 精配准，含 CSF 地面滤波；`GenTriDescsFromCenters` 支持从 2D 坐标直接生成描述符。GUI 构建未使用 GTSAM |
 | **PositionRegistration** | 位置配准：从 TXT/CSV/XLSX 文件解析树干中心坐标，基于三角形描述符哈希匹配 + ICP 精配准，输出 4×4 变换矩阵 |
 
 ## 环境依赖与安装
@@ -114,7 +114,7 @@ MspaceViewer/
 | **Eigen3** | - | PCL 自带 | 线性代数运算 |
 | **OpenMP** | - | MSVC 内置 | 并行计算 |
 | **small_gicp** | - | 嵌入式（thirdParty） | 点云配准 |
-| **nlohmann-json** | 3.12.0 | vcpkg 自动安装 | JSON 解析 |
+| **nlohmann/json** | 仓库内版本 | 嵌入式（`MspaceOctree/libs/json`） | JSON 解析 |
 | **FreeType** | 2.14.3 | vcpkg 自动安装 | 字体渲染 |
 
 ### 第一步：安装 Visual Studio 2022
@@ -131,7 +131,7 @@ MspaceViewer/
 ### 第三步：安装 Qt 6
 
 1. 下载并安装 [Qt 在线安装器](https://www.qt.io/download-qt-installer)
-2. 登录 Qt 账号，选择安装 **Qt 6.11.1**（或更新版本）
+2. 登录 Qt 账号，选择安装 **Qt 6.11.1**；使用其他版本时需修改根目录 `CMakeLists.txt` 中的 Qt 路径
 3. 组件选择：勾选 **MSVC 2022 64-bit** 编译器套件
 4. 记下安装路径，默认为 `D:/Qt/6.11.1/msvc2022_64`
 
@@ -140,7 +140,7 @@ MspaceViewer/
 1. 下载 [PCL 1.14.1 All-in-One](https://github.com/PointCloudLibrary/pcl/releases/tag/pcl-1.14.1)
 2. 运行安装程序，选择 **"Add PCL to the system PATH for all users"**
 3. 默认安装路径：`D:/Program Files/PCL 1.14.1`
-4. 安装包含：PCL 库、Eigen3、Boost、FLANN、VTK、OpenNI2
+4. 安装包含 PCL 库及其 Eigen3、Boost、FLANN、VTK 等依赖；构建脚本另外要求 `C:/Program Files/OpenNI2/Redist/OpenNI2.dll`
 
 ### 第五步：安装 OpenCV 4.7
 
@@ -162,16 +162,15 @@ cd vcpkg
 
 ### 第七步：安装 vcpkg 依赖
 
-```bash
-cd D:/MspaceViewer
-```
+在项目根目录运行下一节的 CMake 配置命令，vcpkg 清单模式会自动安装 `vcpkg.json` 中的依赖：
 
-vcpkg 会自动安装以下依赖（见 `vcpkg.json`）：
-- `osg[core,freetype]` — OpenSceneGraph
+- `osg[freetype]`（禁用默认特性）— OpenSceneGraph
 - `liblas` — LAS 文件读写
 - `boost-filesystem` — 文件系统操作
 - `boost-graph` — 图算法
 - `boost-ptr-container` — 指针容器
+
+当前 `CMakeLists.txt` 还写死了 Qt、PCL、OpenCV、vcpkg 和 OpenNI2 的本机路径。若安装位置不同，先修改这些路径。仅支持 Release 构建；预编译 PCL 依赖没有对应的 Debug DLL。
 
 ## 构建
 
@@ -183,8 +182,8 @@ cd E:/Code/MspaceViewer
 # 1. 配置并生成 Visual Studio 工程（默认不编译 CLI 工具）
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=OFF
 
-# 2. 编译 Release 主程序
-cmake --build build --config Release
+# 2. 编译 Release 主程序及其依赖
+cmake --build build --config Release --target MspaceViewer
 ```
 
 默认 `BUILD_CLI_TOOLS=OFF`，只生成主程序及其依赖库，不生成 `OutlierRemovalRegCLI`、`TLSRegistrationCLI` 和 `ForestRegCLI`。需要编译 CLI 工具时，重新配置并设置为 `ON`：
@@ -194,17 +193,7 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/
 cmake --build build --config Release
 ```
 
-**常用构建命令：**
-
-```bash
-# 仅编译主程序
-cmake --build build --config Release --target MspaceViewer
-
-# 编译当前配置中启用的全部目标
-cmake --build build --config Release
-```
-
-主程序输出路径：`build/bin/Release/MspaceViewer.exe`。
+主程序输出路径：`build/bin/Release/MspaceViewer.exe`。若需构建包括 OSG 插件在内的全部目标，运行 `cmake --build build --config Release`。
 
 ### 使用 Visual Studio
 
@@ -223,18 +212,19 @@ cmake --build build --config Release
 # 方式一：直接运行
 双击 build/bin/Release/MspaceViewer.exe
 
-# 方式二：从项目根目录运行
-.\build\bin\Release\MspaceViewer.exe
+# 方式二：先进入可执行文件目录再运行
+Set-Location .\build\bin\Release
+.\MspaceViewer.exe
 ```
 
-**注意**：首次启动时可能会看到 DPI 感知相关的警告信息（`SetProcessDpiAwarenessContext() failed`），这是正常的，不影响程序使用。
+程序从当前工作目录的 `./resource` 加载翻译文件，因此命令行启动时应先进入可执行文件目录。首次启动时可能会看到 DPI 感知相关的警告信息（`SetProcessDpiAwarenessContext() failed`）。
 
 ## 使用说明
 
 ### 加载点云
 
 1. 启动应用程序，主窗口默认以最大化显示
-2. 通过菜单或工具栏加载 LAS/LAZ 格式的点云文件
+2. 通过菜单或工具栏加载 LAS/LAZ/PCD/PLY 格式的点云文件
 3. 点云将自动转换为八叉树格式并在 OSG 视图中渲染
 
 ### 点云配准
@@ -261,12 +251,12 @@ cmake --build build --config Release
 
 1. 打开森林配准对话框（`ForestRegistration`）
 2. 加载森林场景点云
-3. 执行配准（基于 small_gicp + GTSAM）
+3. 执行配准（三角形描述符匹配粗配准 + small_gicp 精配准）
 
 #### 位置配准（Position Registration）
 
 1. 打开位置配准对话框（`PositionRegistration`）
-2. 选择源文件和目标文件（TXT/CSV/XLSX，每行格式：`id X Y`）
+2. 选择源文件和目标文件（TXT/CSV 使用 `id X Y` 三列；当前 XLSX 解析器固定读取 `sheet1.xml` 的 A/B/C 列）
 3. 设置参数（三角形边长、K 近邻数、几何验证距离、匹配阈值），或直接使用默认值
 4. 选择输出路径，点击「完成」执行配准
 5. 算法流程：
@@ -275,19 +265,28 @@ cmake --build build --config Release
    - 对源数据构建描述符，在哈希表中搜索匹配三角形对
    - SVD 求解位姿 + 交叉投票验证
    - ICP 精配准微调
-   - 输出 4×4 变换矩阵文件（`.txt`）
-   - 输出配准误差最小的 N 对控制点 CSV 文件（`.csv`），默认 N=7
+   - 输出 `<源>_to_<目标>_transformationMatrix.txt`：前四行是制表符分隔的 4×4 矩阵（紧凑的 12 位有效数字），后两行是便于阅读的 `rotation:` 和 `translation:`。程序日志中的矩阵显示六位小数，计算过程使用 `double` 精度
+   - 输出已变换的源树中心 `<源>_to_<目标>_transformedSource.csv`
+   - 输出误差最小的 N 行最近邻点对 `<源>_to_<目标>_bestPairs.csv`，默认 N=7；点对未强制一一对应
+
+矩阵文件可直接传给 `test/test_transform_compare.py` 的 `-m` 参数；脚本只读取前四行矩阵。该脚本还需要源和目标 XLSX 文件，以及 `numpy`、`openpyxl`、`matplotlib`、`scipy`。当前内置 XLSX 解析器要求 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet1.xml`，因此并非所有有效 XLSX 文件都能读取；遇到解析失败可改用 TXT/CSV。
 
 ## 打包发布
 
-项目使用 **CPack** 打包，一键完成编译、安装、打包：
+面向 Windows 用户的 ZIP 应作为 GitHub **Release** 的附件发布。GitHub 仓库页面的 **Packages** 用于包注册表，不是此桌面程序 ZIP 的发布入口；GitHub 自动生成的 Source code ZIP 也不是已编译程序。
+
+项目使用 **CPack** 在本地生成 Release 配置的 ZIP。发布包若要包含三个 CLI，先启用 `BUILD_CLI_TOOLS=ON` 并构建全部目标：
 
 ```powershell
-# 编译 → 安装（收集 exe + 所有依赖 DLL） → 打包为 ZIP
-cmake --build build --config Release 2>&1; cmake --install build --config Release 2>&1; cd build; cpack -C Release -G ZIP 2>&1
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=ON
+cmake --build build --config Release
+cmake --install build --config Release
+Push-Location build
+cpack -C Release -G ZIP
+Pop-Location
 ```
 
-执行完成后在 `build/` 目录下生成 `MspaceViewer-1.0.0-win64.zip`，包含完整可运行的应用程序。
+每条命令成功后再执行下一条。执行成功会在 `build/` 目录下生成 `MspaceViewer-1.0.0-win64.zip`，其中包含 `MspaceViewer.exe`、`OutlierRemovalRegCLI.exe`、`TLSRegistrationCLI.exe`、`ForestRegCLI.exe` 及运行依赖。`BUILD_CLI_TOOLS=OFF` 时不会构建或打包 CLI。发布前应在目标机器上验证启动和点云加载。
 
 ### 打包流程说明
 
@@ -301,7 +300,7 @@ cmake --build build --config Release 2>&1; cmake --install build --config Releas
 
 | 来源 | 文件 |
 |------|------|
-| 项目目标 | MspaceViewer.exe, MspaceOctree.dll, osgQt.dll, osgdb_bin.dll, D4PCR.dll, ULS-TLS.dll, TLSRegistration.dll |
+| 项目目标 | MspaceViewer.exe、项目 DLL；启用 `BUILD_CLI_TOOLS=ON` 时另含三个 CLI 可执行文件 |
 | vcpkg | OSG, libLAS, Boost, FreeType 等 DLL |
 | PCL | pcl_*.dll, VTK DLLs, FLANN DLL |
 | Qt6 | Qt6Core/Gui/Widgets/Concurrent/OpenGL 等 DLL |
@@ -335,4 +334,4 @@ cmake --build build --config Release 2>&1; cmake --install build --config Releas
 - **small_gicp**：[BSD](https://github.com/koide3/small_gicp)
 - **CSF**：[GPL](https://github.com/jianboqian/CSF)
 
-本项目自身的开源协议请参见仓库中的 `LICENSE` 文件。
+仓库根目录目前没有 `LICENSE` 文件；项目自身的授权条款尚需明确。

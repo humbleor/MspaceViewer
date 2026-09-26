@@ -652,13 +652,16 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 		}
 
 		std::filesystem::path sourcePath(sourceFile), targetPath(targetFile);
-		std::string outFile = outputDir + "/" + sourcePath.stem().string()
-		                    + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt";
-		std::ofstream dataOut(outFile);
+		const std::string resultPrefix = outputDir + "/" + sourcePath.stem().string()
+		                               + "_to_" + targetPath.stem().string();
+		const std::string matrixFile = resultPrefix + "_transformationMatrix.txt";
+		std::ofstream dataOut(matrixFile);
 		if (!dataOut)
 			{ logToLoggerPos(logger, tr("Failed to create transformation matrix file!\n")); delete hashReg; return; }
 
-		dataOut << std::fixed << std::setprecision(6);
+		// Use a compact, higher-precision format for reapplying the transform to
+		// large map coordinates. The UI below still displays six decimal places.
+		dataOut << std::setprecision(12);
 		for (int i = 0; i < 4; i++)
 		{
 			for (int j = 0; j < 4; j++)
@@ -669,26 +672,29 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 			dataOut << "\n";
 		}
 
-		// Append axis-angle rotation + translation.
-		// This is a 2D UTM registration, so the rotation is a pure rotation about +Z:
+		// Append a readable summary after the four numeric matrix rows.
+		// This is a 2D UTM registration, so the rotation is about +Z.
 		const double kPi = 3.14159265358979323846;
 		double angleDeg = std::atan2(final_matrix(1, 0), final_matrix(0, 0)) * 180.0 / kPi;
 		if (angleDeg < 0.0) angleDeg += 360.0;
-		dataOut << std::setprecision(4)
+		dataOut << std::fixed << std::setprecision(4)
 		        << "rotation: (0.0000, 0.0000, 1.0000):" << angleDeg << " deg\n";
 		dataOut << std::setprecision(6)
 		        << "translation: (" << final_matrix(0, 3) << ", "
 		        << final_matrix(1, 3) << ", " << final_matrix(2, 3) << ") m\n";
 		dataOut.close();
+		logToLoggerPos(logger, tr("Rotation about +Z: %1 deg\n").arg(angleDeg, 0, 'f', 4));
+		logToLoggerPos(logger, tr("Translation: (%1, %2, %3) m\n")
+			.arg(final_matrix(0, 3), 0, 'f', 6)
+			.arg(final_matrix(1, 3), 0, 'f', 6)
+			.arg(final_matrix(2, 3), 0, 'f', 6));
 
 		// Output the transformed source tree centers in the target UTM frame.
-		// already aligned — no matrix needs to be applied by the user, which
-		// avoids the UTM-scale precision/global-shift pitfalls of the matrix.
+		// already aligned, so users can also inspect results without applying the matrix.
 		{
 			Eigen::Matrix3d finalR = final_matrix.block<3, 3>(0, 0);
 			Eigen::Vector3d finalT = final_matrix.block<3, 1>(0, 3);
-			std::string csvFile = outputDir + "/" + sourcePath.stem().string()
-			                    + "_to_" + targetPath.stem().string() + "_transformedSource.csv";
+			std::string csvFile = resultPrefix + "_transformedSource.csv";
 			std::ofstream csvOut(csvFile);
 			if (csvOut)
 			{
@@ -754,8 +760,7 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 				[](const PointPair& a, const PointPair& b) { return a.error < b.error; });
 
 			int writeCount = std::min(numPairs, static_cast<int>(pairs.size()));
-			std::string csvFile = outputDir + "/" + sourcePath.stem().string()
-			                    + "_to_" + targetPath.stem().string() + "_bestPairs.csv";
+			std::string csvFile = resultPrefix + "_bestPairs.csv";
 			std::ofstream csvOut(csvFile);
 			if (csvOut)
 			{
@@ -795,7 +800,7 @@ void PositionRegistration::registration(PositionRegParams params, QTextEdit* log
 				line += QString("%1").arg(final_matrix(i, j), 16, 'f', 6);
 			logToLoggerPos(logger, line + "\n");
 		}
-		logToLoggerPos(logger, tr("Transform matrix saved to: ") + QString::fromStdString(outFile) + "\n");
+		logToLoggerPos(logger, tr("Transform matrix saved to: ") + QString::fromStdString(matrixFile) + "\n");
 		logToLoggerPos(logger, tr("===================================\n"));
 		logToLoggerPos(logger, tr("Position-based registration completed!\n"));
 

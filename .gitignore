@@ -1,12 +1,11 @@
 .vscode/
 build/
 vcpkg_installed/
-test/*.csv
-test/*.png
 
 .claude/
 .mimocode/
 CLAUDE.md
 AGENTS.md
 DEVLOG.md
+tests/
 run/

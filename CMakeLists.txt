@@ -274,7 +274,13 @@ set(CMAKE_INSTALL_PREFIX "${INSTALL_PREFIX}" CACHE PATH "Install prefix" FORCE)
 install(TARGETS MspaceViewer MspaceOctree laszip osgQt osgdb_bin D4PCR ULS-TLS TLSRegistration
     RUNTIME DESTINATION .)
 
+if(BUILD_CLI_TOOLS)
+    install(TARGETS OutlierRemovalRegCLI TLSRegistrationCLI ForestRegCLI
+        RUNTIME DESTINATION .)
+endif()
+
 # ── Resource directories ──
+install(FILES "${CMAKE_SOURCE_DIR}/README.md" DESTINATION .)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/MainWindow/resource"
     DESTINATION .
     FILES_MATCHING PATTERN "*.qm" PATTERN "*.ts" PATTERN "*.ui" PATTERN "*.qrc"
