@@ -1,5 +1,5 @@
 #pragma once
-#ifdef D4PCR_DLL_EXPORT   // Èç¹ûÔÚ±àÒëDLLÊ±¶¨ÒåÁËÕâ¸öºê
+#ifdef D4PCR_DLL_EXPORT   // å¦‚æœåœ¨ç¼–è¯‘DLLæ—¶å®šä¹‰äº†è¿™ä¸ªå®
 #define DLL_EXPORT __declspec(dllexport)
 #else
 #define DLL_EXPORT __declspec(dllimport)

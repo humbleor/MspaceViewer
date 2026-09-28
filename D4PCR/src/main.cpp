@@ -198,21 +198,21 @@ int main()
 	//}
 	//datafile.close();
 
-	//	// ����PCLVisualizer����
+	//	// 创建 PCLVisualizer 对象
 	//pcl::visualization::PCLVisualizer viewer("Cloud Viewer");
-	//viewer.setBackgroundColor(1.0, 1.0, 1.0); // RGBֵΪ(1,1,1)��ʾ��ɫ
+	//viewer.setBackgroundColor(1.0, 1.0, 1.0); // RGB 值为 (1,1,1)，表示白色
 
-	//// ���������ӵ����ӻ���
+	//// 将源点云添加到可视化窗口
 	//viewer.addPointCloud<pcl::PointXYZ>(sampledCloudS, "sample cloudS");
 
-	//// ���õ��Ƶ���ɫ����ѡ��
+	//// 设置点云颜色和点大小
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.67, 0.0, "sample cloudS");
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloudS");
 
-	//// ���������ӵ����ӻ���
+	//// 将目标点云添加到可视化窗口
 	//viewer.addPointCloud<pcl::PointXYZ>(sampledCloudT, "sample cloudT");
 
-	//// ���õ��Ƶ���ɫ����ѡ��
+	//// 设置点云颜色和点大小
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.67, 1.0, "sample cloudT");
 	//viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloudT");
 
@@ -230,21 +230,21 @@ int main()
 	//{
 	//	viewer.addLine<pcl::PointXYZ>(sampledCloudS->points[cors[i].index_query], sampledCloudT->points[cors[i].index_match], "line" + std::to_string(i));
 	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "line" + std::to_string(i));
-	//	// ����ֱ�ߵ�͸����
-	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // ͸��������Ϊ0.5
+	//	// 设置直线透明度
+	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透明度为 0.3
 	//}
 
 	//for (size_t i = number*outliersRatio; i < cors.size(); i += 1)
 	//{
 	//	viewer.addLine<pcl::PointXYZ>(sampledCloudS->points[cors[i].index_query], sampledCloudT->points[cors[i].index_match], "line" + std::to_string(i));
 	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "line" + std::to_string(i));
-	//	// ����ֱ�ߵ�͸����
-	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // ͸��������Ϊ0.5
+	//	// 设置直线透明度
+	//	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 0.3, "line" + std::to_string(i));  // 透明度为 0.3
 	//}
 
 
 
-	//// ��ѭ����ֱ�����ڱ��ر�
+	//// 循环显示可视化窗口，直到手动关闭
 	//while (!viewer.wasStopped())
 	//{
 	//	viewer.spinOnce(100);

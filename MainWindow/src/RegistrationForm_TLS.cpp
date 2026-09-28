@@ -1,11 +1,13 @@
 #include "../include/RegistrationForm_TLS.h"
 #include "../include/PointCloudLoader.h"
-#include "../include/RunFuture.h"
+#include <QCoreApplication>
+#include <QFutureWatcher>
 
-static void logToLogger(QTextEdit* logger, const QString& text)
+static void logToLogger(QPointer<QTextEdit> logger, const QString& text)
 {
-	QMetaObject::invokeMethod(logger, [logger, text]() {
-		logger->insertPlainText(text);
+	QMetaObject::invokeMethod(QCoreApplication::instance(), [logger, text]() {
+		if (logger)
+			logger->insertPlainText(text);
 	}, Qt::QueuedConnection);
 }
 
@@ -63,7 +65,8 @@ void RegistrationForm_TLS::selectOutputDir()
 	_outputFileOfDir->setText(dir);
 }
 
-void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
+bool RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextEdit* logger,
+	std::function<void()> onFinished)
 {
 	if (_sector_num->text().isEmpty() ||
 		_resolution_Radius->text().isEmpty() ||
@@ -74,7 +77,7 @@ void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextE
 		_error_z->text().isEmpty() ||
 		_pointsConstrain->text().isEmpty() ||
 		_zConstrain->text().isEmpty())
-		return;
+		return false;
 
 	TLSRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
@@ -90,26 +93,52 @@ void RegistrationForm_TLS::executeRegistration(QProgressDialog* progress, QTextE
 	params.pointsConstrain = _pointsConstrain->text().toUInt();
 	params.zConstrain = _zConstrain->text().toFloat();
 
-	if (progress)
-	{
-		progress->setLabelText(tr("Performing point cloud registration ..."));
-		progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint & ~Qt::WindowContextHelpButtonHint);
-		progress->setCancelButton(nullptr);
-		progress->show();
-		progress->raise();
-	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationForm_TLS::registration, this, params, logger));
-	runFutureBlocking(future);
+	if (!progress)
+		return false;
+	progress->setRange(0, 100);
+	progress->setValue(0);
+	progress->setLabelText(tr("Loading point clouds ..."));
+	progress->setCancelButton(nullptr);
+	progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint);
+	progress->setAutoClose(false);
+	progress->setWindowModality(Qt::NonModal);
+	progress->show();
+
+	QPointer<QProgressDialog> progressGuard(progress);
+	QPointer<QTextEdit> loggerGuard(logger);
+	auto reportProgress = [progressGuard](int value, const QString& stage) {
+		QMetaObject::invokeMethod(QCoreApplication::instance(), [progressGuard, value, stage]() {
+			if (progressGuard) {
+				progressGuard->setLabelText(stage);
+				progressGuard->setValue(value);
+			}
+		}, Qt::QueuedConnection);
+	};
+	auto* watcher = new QFutureWatcher<void>(progress);
+	connect(watcher, &QFutureWatcher<void>::finished, progress,
+		[progressGuard, watcher, onFinished = std::move(onFinished)]() {
+			if (progressGuard) {
+				progressGuard->setValue(100);
+				progressGuard->close();
+				progressGuard->deleteLater();
+			}
+			onFinished();
+			watcher->deleteLater();
+		});
+	watcher->setFuture(QtConcurrent::run([params, loggerGuard, reportProgress]() {
+		registration(params, loggerGuard, reportProgress);
+	}));
+	return true;
 }
 
 void RegistrationForm_TLS::apply()
 {
-	this->done(QDialog::Accepted); // ����ֱ�� this->accept();
+	this->done(QDialog::Accepted); // 等同于 this->accept();
 }
 
 void RegistrationForm_TLS::reject()
 {
-	this->done(QDialog::Rejected); // ����ֱ�� this->reject();
+	this->done(QDialog::Rejected); // 等同于 this->reject();
 }
 
 void RegistrationForm_TLS::initParam()
@@ -127,7 +156,8 @@ void RegistrationForm_TLS::initParam()
 	_zConstrain->setText("0.2");
 }
 
-void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
+void RegistrationForm_TLS::registration(TLSRegParams params, QPointer<QTextEdit> logger,
+	std::function<void(int, const QString&)> reportProgress)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -142,6 +172,7 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 		logToLogger(logger, tr("Failed to load target point cloud file!") + "\n");
 		return;
 	}
+	reportProgress(5, tr("Building rhombus descriptors ..."));
 
 	int num_sectors = params.sector_num;
 	float R_neighbor = params.maxRadius;
@@ -156,13 +187,13 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	unsigned int icp_canshu1 = params.pointsConstrain;
 	float icp_canshu2 = params.zConstrain;
 
-	//------------------------------------------������------------------------------------------
+	//------------------------------------------粗配准------------------------------------------
 	int num_combinations = num_sectors * num_sectors;
 	vector<vector<int>> target_rhombus_indices;
 	target_rhombus_indices = compute_rhombus_pointclouds(target_cloud, R_neighbor, num_sectors);
 	vector<vector<int>> source_rhombus_indices;
 	source_rhombus_indices = compute_rhombus_pointclouds(source_cloud, R_neighbor, num_sectors);
-	int fault_tolerant_iterations = 2;//���� ���������Ӧ��ϵ��Ӧʱʹ��
+	int fault_tolerant_iterations = 2;// 描述子匹配时允许相邻网格偏移
 	std::vector <vector<vector<pcl::PointXYZ>>> target_rhombus_descriptors(num_sectors);
 	std::vector <vector<vector<pcl::PointXYZ>>> source_rhombus_descriptors(num_sectors);
 	float dTheta = 360.0 / num_sectors;
@@ -172,8 +203,12 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	{
 		target_rhombus_descriptors[i] = get_rhombus_descriptors(target_cloud, target_rhombus_indices[i], i * dTheta, R_neighbor, Step);
 		source_rhombus_descriptors[i] = get_rhombus_descriptors(source_cloud, source_rhombus_indices[i], i * dTheta, R_neighbor, Step);
+		if ((i + 1) % std::max(1, num_sectors / 15) == 0)
+			reportProgress(5 + 15 * (i + 1) / num_sectors,
+				tr("Building rhombus descriptors: sector %1 of %2 ...").arg(i + 1).arg(num_sectors));
 
 	}
+	reportProgress(20, tr("Matching descriptors ..."));
 
 	int num_dR = static_cast<int>((R_neighbor - r_neighbor) / dR) + 1;
 	std::vector<std::vector<float>> corr_dR(num_dR, std::vector<float>(4));//i j l dz
@@ -181,7 +216,7 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	std::vector<std::vector<int>> corr(num_combinations, std::vector<int>(2));
 	vector<float> score(num_combinations, 10.0);
 	vector<float> Diff_Zt_Zs(num_combinations, 0.0);//Zt_Zs
-	vector<float> Diff_Lts(num_combinations, 0.0);//xoyƽ���ϵ�ƽ�Ƴ���
+	vector<float> Diff_Lts(num_combinations, 0.0);// XY 平面上的平移长度
 
 	// Pre-allocate neighbor buffers once to avoid repeated allocations in inner loops
 	int max_grid_line_num = static_cast<int>((R_neighbor) * sin(60.0 * M_PI / 180.0) / Step) + 1;
@@ -243,8 +278,8 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 						}
 						size_t min_index = std::min_element(neighbor_DiffD.begin() + index, neighbor_DiffD.begin() + index + fault_tolerant_iterations) - neighbor_DiffD.begin();
-						//��ȡ��Сֵ����
-						if (neighbor_DiffD[min_index] <= 0.05)  //����С��0.12����
+						// 获取最小值的索引
+						if (neighbor_DiffD[min_index] <= 0.05)  // 差值阈值为 0.05
 						{
 							sum_dz += neighbor_DZ[min_index];
 							sum_dl += neighbor_Dist[min_index];
@@ -267,10 +302,15 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 				}
 				count += 1;
 			}
+			const int completed = static_cast<int>(ii) * num_sectors + static_cast<int>(i) + 1;
+			const int total = num_dR * num_sectors;
+			if (completed % std::max(1, total / 55) == 0)
+				reportProgress(20 + 55 * completed / total,
+					tr("Matching descriptors: radius %1 of %2 ...").arg(ii + 1).arg(num_dR));
 		}
 
-		auto smallest = std::min_element(std::begin(score), std::end(score));                   //��ȡ��Сֵָ��
-		int nMinIndex = std::distance(std::begin(score), smallest);                             //��ȡ��Сֵ����
+		auto smallest = std::min_element(std::begin(score), std::end(score));                   // 获取最小值迭代器
+		int nMinIndex = std::distance(std::begin(score), smallest);                             // 获取最小值索引
 		corr_dR[ii][0] = corr[nMinIndex][0] * dTheta;//i j l dz
 		corr_dR[ii][1] = corr[nMinIndex][1] * dTheta;//i j l dz
 		corr_dR[ii][2] = Diff_Lts[nMinIndex];//i j l dz
@@ -286,12 +326,15 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 		}
 		//std::cout << "ii:" << ii << endl;
+		reportProgress(20 + static_cast<int>(55 * (ii + 1) / num_dR),
+			tr("Matching descriptors: radius %1 of %2 ...").arg(ii + 1).arg(num_dR));
 	}
 
 
-	auto lest = std::min_element(std::begin(std_dR), std::end(std_dR));                   //��ȡ��Сֵָ��  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
-	int minIndex = std::distance(std::begin(std_dR), lest);                             //��ȡ��Сֵ����
+	auto lest = std::min_element(std::begin(std_dR), std::end(std_dR));                   // 获取最小值迭代器
+	int minIndex = std::distance(std::begin(std_dR), lest);                             // 获取最小值索引
 	logToLogger(logger, tr("minIndex:") + QString::number(minIndex) + "\n");
+	reportProgress(75, tr("Computing feature correspondences ..."));
 
 	// Descriptor data no longer needed, release memory
 	target_rhombus_descriptors.clear();
@@ -316,15 +359,15 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 	//std::cout << "T-Idx:" << corr_dR[minIndex][0] << " S-Idx:" << corr_dR[minIndex][1] << endl;
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
-	vg.setInputCloud(sourceOverlapAll);             // �������
-	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ������С���ر߳�
-	vg.filter(*source);          // �����˲�
-	vg.setInputCloud(targetOverlapAll);             // �������
-	vg.setLeafSize(0.05f, 0.05f, 0.05f); // ������С���ر߳�
+	vg.setInputCloud(sourceOverlapAll);             // 设置源点云
+	vg.setLeafSize(0.05f, 0.05f, 0.05f); // 设置体素大小
+	vg.filter(*source);          // 体素滤波
+	vg.setInputCloud(targetOverlapAll);             // 设置目标点云
+	vg.setLeafSize(0.05f, 0.05f, 0.05f); // 设置体素大小
 	vg.filter(*target);
 	/*cout << "source_cloud after filtering: " << source->size() << endl;
 	cout << "target_cloud after filtering: " << target->size() << endl;*/
-	//---------------����Դ���ƺ�Ŀ����Ƶ�FPFH------------------------
+	//---------------计算源点云和目标点云的 FPFH 特征------------------------
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
 	pcl::PointCloud<pcl::Normal>::Ptr source_normals(new pcl::PointCloud<pcl::Normal>);
 	pcl::PointCloud<pcl::Normal>::Ptr target_normals(new pcl::PointCloud<pcl::Normal>);
@@ -381,6 +424,11 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 	const int MAX_RANSAC_ITERATIONS = 10000;
 	int n_total_pairs = total * (total - 1) / 2;
 	int n_ransac = (n_total_pairs > MAX_RANSAC_ITERATIONS) ? MAX_RANSAC_ITERATIONS : n_total_pairs;
+	if (n_ransac == 0) {
+		logToLogger(logger, tr("No usable feature correspondences found. Registration stopped.") + "\n");
+		return;
+	}
+	reportProgress(80, tr("Estimating the initial transform ..."));
 	std::vector<Eigen::Matrix4f> Transform_ransac(n_ransac);
 	std::vector<float> score_ransac(n_ransac, 100.0);
 	int iteration_ransac = 0;
@@ -413,11 +461,15 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 				Transform_ransac[iteration_ransac] = Transform;
 			}
 			iteration_ransac += 1;
+			if (iteration_ransac % std::max(1, n_ransac / 10) == 0)
+				reportProgress(80 + 10 * iteration_ransac / n_ransac,
+					tr("Estimating transform: pair %1 of %2 ...").arg(iteration_ransac).arg(n_ransac));
 		}
 		if (iteration_ransac >= n_ransac) break;
 	}
-	auto lest_ransac = std::min_element(std::begin(score_ransac), std::end(score_ransac));                   //��ȡ��Сֵָ��  static_cast<int>(corr_dR[minIndex][0] + i * 0.2)
-	int minIndex_ransac = std::distance(std::begin(score_ransac), lest_ransac);                             //��ȡ��Сֵ����
+	reportProgress(90, tr("Refining registration with ICP ..."));
+	auto lest_ransac = std::min_element(std::begin(score_ransac), std::end(score_ransac));                   // 获取最小值迭代器
+	int minIndex_ransac = std::distance(std::begin(score_ransac), lest_ransac);                             // 获取最小值索引
 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_src(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::transformPointCloud(*sourceOverlapAll, *transformed_src, Transform_ransac[minIndex_ransac]);
@@ -467,22 +519,23 @@ void RegistrationForm_TLS::registration(TLSRegParams params, QTextEdit* logger)
 
 	Eigen::Matrix4f transformation_matrix1;
 
-	//-----------------ƴ�ӵ����뷨����Ϣ-------------------
+	//-----------------计算参与 ICP 的点云法线-------------------
 	pcl::PointCloud<pcl::PointNormal>::Ptr source_with_normals(new pcl::PointCloud<pcl::PointNormal>);
 	cloud_with_normal(overlapTransformed_src, source_with_normals);
 	pcl::PointCloud<pcl::PointNormal>::Ptr target_with_normals(new pcl::PointCloud<pcl::PointNormal>);
 	cloud_with_normal(overlap_tgt, target_with_normals);
-	//----------------�㵽���icp������棩-----------------
+	//----------------点到面 ICP 配准-----------------
 	pcl::IterativeClosestPointWithNormals<pcl::PointNormal, pcl::PointNormal>p_icp;
 	p_icp.setInputSource(source_with_normals);
 	p_icp.setInputTarget(target_with_normals);
-	p_icp.setTransformationEpsilon(1e-10);    // Ϊ��ֹ����������Сת������
-	p_icp.setMaxCorrespondenceDistance(0.03);   // ���ö�Ӧ���֮��������루��ֵ����׼���Ӱ��ϴ󣩡�
-	p_icp.setEuclideanFitnessEpsilon(0.0001);  // �������������Ǿ�������С����ֵ�� ֹͣ������
-	//p_icp.setUseSymmetricObjective(true);   // ����Ϊtrue���Ϊ��һ���㷨
-	p_icp.setMaximumIterations(35);           // ����������
+	p_icp.setTransformationEpsilon(1e-10);    // 变换收敛阈值
+	p_icp.setMaxCorrespondenceDistance(0.03);   // 最大对应点距离
+	p_icp.setEuclideanFitnessEpsilon(0.0001);  // 适应度收敛阈值
+	//p_icp.setUseSymmetricObjective(true);   // 可选的对称目标函数
+	p_icp.setMaximumIterations(35);           // 最大迭代次数
 	pcl::PointCloud<pcl::PointNormal>::Ptr p_icp_cloud(new pcl::PointCloud<pcl::PointNormal>);
 	p_icp.align(*p_icp_cloud);
+	reportProgress(95, tr("Saving registration results ..."));
 
 	transformation_matrix1 = p_icp.getFinalTransformation();
 	transformation_matrix1 = transformation_matrix1 * Transform_ransac[minIndex_ransac];

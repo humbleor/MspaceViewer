@@ -277,7 +277,7 @@ void Decoupling::decoupling(PointCloudPtr sampledCloudS, PointCloudPtr sampledCl
 	//size_t inlierMaxNum = 0, outlierMaxNum = 0;
 
 	//std::vector<size_t> freeIndexSet(corsNum);
-	//// Ê¹ÓÃstd::iotaÀ´Ìî³ävector£¬´Ó0µ½n-1
+	//// ä½¿ç”¨std::iotaæ¥å¡«å……vectorï¼Œä»0åˆ°n-1
 	//size_t first = 0, second = 0;
 	//std::iota(freeIndexSet.begin(), freeIndexSet.end(), 0);
 	//for (size_t i = 0; i < freeIndexSet.size(); i++)
@@ -543,7 +543,7 @@ void Decoupling::decoupling2(PointCloudPtr sampledCloudS, PointCloudPtr sampledC
 		edgeSet.emplace_back(edge);
 	}
 
-	//Çó·½Ïò
+	//æ±‚æ–¹å‘
 
 	Intervals horizontalLSet;
 	Interval horizontalL;

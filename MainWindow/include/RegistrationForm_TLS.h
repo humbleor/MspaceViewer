@@ -6,8 +6,10 @@
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <QTextEdit>
+#include <QPointer>
 
 #include <filesystem>
+#include <functional>
 
 #include <Function.h>
 
@@ -17,17 +19,17 @@ public:
 	explicit RegistrationForm_TLS(QWidget* parent = nullptr);
 	~RegistrationForm_TLS();
 
-	//ִ��ע��
-	void executeRegistration(QProgressDialog* progress, QTextEdit* logger);
+	// 执行配准
+	bool executeRegistration(QProgressDialog* progress, QTextEdit* logger, std::function<void()> onFinished);
 
 private slots:
 	void apply();
 	void reject();
-	//ѡ�������Դ����
+	// 选择源点云文件
 	void selectInputFileOfSource();
-	//ѡ�������Ŀ�����
+	// 选择目标点云文件
 	void selectInputFileOfTarget();
-	// ѡ�����·��
+	// 选择输出目录
 	void selectOutputDir();
 
 private:
@@ -48,6 +50,7 @@ private:
 		float zConstrain;
 	};
 
-	void registration(TLSRegParams params, QTextEdit* logger);
+	static void registration(TLSRegParams params, QPointer<QTextEdit> logger,
+		std::function<void(int, const QString&)> reportProgress);
 
 };

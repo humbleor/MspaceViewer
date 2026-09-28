@@ -6,6 +6,7 @@
 #include <QtWidgets/QFileDialog>
 #include <atomic>
 #include <QtWidgets/QMessageBox>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -32,6 +33,17 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (_isRegistering) {
+        event->ignore();
+        QMessageBox::information(this, tr("Registration in progress"),
+            tr("Please wait for the current registration to finish before closing the application."));
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::InitForm()
@@ -222,22 +234,25 @@ void MainWindow::registration_TLS_ULS()
 		ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
 		return;
 	}
-	std::shared_ptr<RegistrationULS> _registrationULS = std::make_shared<RegistrationULS>(this);
-    if (!_registrationULS->exec())
+	RegistrationULS registrationULS(this);
+    if (!registrationULS.exec())
 	{
 		_isRegistering = false;
 		return;
 	}
-	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
-	pDlg->setWindowTitle(tr("Tips"));
-	pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
-	QProgressBar* pBar = new QProgressBar(pDlg.get());
-	pBar->setRange(0, 0);
+	auto* pDlg = new QProgressDialog(this);
+	pDlg->setWindowTitle(tr("ULS-TLS Registration Progress"));
+	QProgressBar* pBar = new QProgressBar(pDlg);
+	pBar->setRange(0, 100);
 	pBar->setAlignment(Qt::AlignCenter);
 	pDlg->setBar(pBar);
 	ui._Logger->insertPlainText(tr("\n========== ULS-TLS Registration ==========\n"));
-	_registrationULS->executeRegistration(pDlg.get(), ui._Logger);
-	_isRegistering = false;
+	if (!registrationULS.executeRegistration(pDlg, ui._Logger, [this]() {
+		_isRegistering = false;
+	})) {
+		pDlg->deleteLater();
+		_isRegistering = false;
+	}
 }
 
 void MainWindow::outlierRemovalRegistration()
@@ -247,22 +262,25 @@ void MainWindow::outlierRemovalRegistration()
         ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
         return;
     }
-    std::shared_ptr<OutlierRemovalRegistration> _outlierRemovalRegistration = std::make_shared<OutlierRemovalRegistration>(this);
-    if (!_outlierRemovalRegistration->exec())
+    OutlierRemovalRegistration outlierRegistration(this);
+    if (!outlierRegistration.exec())
     {
         _isRegistering = false;
         return;
     }
-    std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
-    pDlg->setWindowTitle(tr("Tips"));
-    pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
-    QProgressBar* pBar = new QProgressBar(pDlg.get());
-    pBar->setRange(0, 0);
+    auto* pDlg = new QProgressDialog(this);
+    pDlg->setWindowTitle(tr("D4PCR Registration Progress"));
+    QProgressBar* pBar = new QProgressBar(pDlg);
+    pBar->setRange(0, 100);
     pBar->setAlignment(Qt::AlignCenter);
     pDlg->setBar(pBar);
 	ui._Logger->insertPlainText(tr("\n========== Outlier Removal Registration ==========\n"));
-	_outlierRemovalRegistration->executeRegistration(pDlg.get(), ui._Logger);
-	_isRegistering = false;
+	if (!outlierRegistration.executeRegistration(pDlg, ui._Logger, [this]() {
+		_isRegistering = false;
+	})) {
+		pDlg->deleteLater();
+		_isRegistering = false;
+	}
 }
 
 void MainWindow::registration_TLS()
@@ -272,22 +290,25 @@ void MainWindow::registration_TLS()
         ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
         return;
     }
-    std::shared_ptr<RegistrationForm_TLS> _registrationTLS = std::make_shared<RegistrationForm_TLS>(this);
-    if (!_registrationTLS->exec())
+    RegistrationForm_TLS registrationTLS(this);
+	if (!registrationTLS.exec())
     {
         _isRegistering = false;
         return;
     }
-    std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
-    pDlg->setWindowTitle(tr("Tips"));
-    pDlg->setModal(true); // 设置为模态对话框，阻塞用户操作
-    QProgressBar* pBar = new QProgressBar(pDlg.get());
-    pBar->setRange(0, 0);
+    auto* pDlg = new QProgressDialog(this);
+    pDlg->setWindowTitle(tr("TLS-TLS Registration Progress"));
+    QProgressBar* pBar = new QProgressBar(pDlg);
+    pBar->setRange(0, 100);
     pBar->setAlignment(Qt::AlignCenter);
     pDlg->setBar(pBar);
     ui._Logger->insertPlainText(tr("\n========== TLS-TLS Registration ==========\n"));
-    _registrationTLS->executeRegistration(pDlg.get(), ui._Logger);
-    _isRegistering = false;
+    if (!registrationTLS.executeRegistration(pDlg, ui._Logger, [this]() {
+        _isRegistering = false;
+    })) {
+        pDlg->deleteLater();
+        _isRegistering = false;
+    }
 }
 
 void MainWindow::registration_Forest()
@@ -297,22 +318,25 @@ void MainWindow::registration_Forest()
 		ui._Logger->insertPlainText(tr("[WARNING] A registration is already running, please wait...") + "\n");
 		return;
 	}
-	std::shared_ptr<ForestRegistration> _forestRegistration = std::make_shared<ForestRegistration>(this);
-    if (!_forestRegistration->exec())
+	ForestRegistration forestRegistration(this);
+    if (!forestRegistration.exec())
 	{
 		_isRegistering = false;
 		return;
 	}
-	std::shared_ptr<QProgressDialog> pDlg = std::make_shared<QProgressDialog>(this);
-	pDlg->setWindowTitle(tr("Tips"));
-	pDlg->setModal(true);
-	QProgressBar* pBar = new QProgressBar(pDlg.get());
-	pBar->setRange(0, 0);
+	auto* pDlg = new QProgressDialog(this);
+	pDlg->setWindowTitle(tr("Forest Registration Progress"));
+	QProgressBar* pBar = new QProgressBar(pDlg);
+	pBar->setRange(0, 100);
 	pBar->setAlignment(Qt::AlignCenter);
 	pDlg->setBar(pBar);
 	ui._Logger->insertPlainText(tr("\n========== Forest TLS Registration ==========\n"));
-	_forestRegistration->executeRegistration(pDlg.get(), ui._Logger);
-	_isRegistering = false;
+	if (!forestRegistration.executeRegistration(pDlg, ui._Logger, [this]() {
+		_isRegistering = false;
+	})) {
+		pDlg->deleteLater();
+		_isRegistering = false;
+	}
 }
 
 void MainWindow::registration_Position()
@@ -366,7 +390,7 @@ void MainWindow::showAbout()
         "<p>" + tr("Built with Qt") + " 6 | " + tr("C++ Standard") + " 20</p>"
         "<p>" + tr("Dependencies") + ": PCL, OpenSceneGraph, OpenCV, libLAS</p>"
         "<hr>"
-        "<p>© 2025 MSpaceViewer Team</p>"
+        "<p>© 2025 Mspace Team</p>"
     );
     about.exec();
 }

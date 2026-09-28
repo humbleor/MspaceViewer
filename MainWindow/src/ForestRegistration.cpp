@@ -1,5 +1,5 @@
 #include "../include/ForestRegistration.h"
-#include "../include/RunFuture.h"
+#include "../include/AsyncRegistration.h"
 #include <QScrollBar>
 
 // Forest_TLS_Reg headers
@@ -27,13 +27,9 @@
 
 #include <algorithm>
 
-static void logToLoggerForest(QTextEdit* logger, const QString& text)
+static void logToLoggerForest(QPointer<QTextEdit> logger, const QString& text)
 {
-	if (!logger) return;
-	QMetaObject::invokeMethod(logger, [logger, text]() {
-		logger->insertPlainText(text);
-		logger->verticalScrollBar()->setValue(logger->verticalScrollBar()->maximum());
-	}, Qt::QueuedConnection);
+	registrationui::log(logger, text, true);
 }
 
 ForestRegistration::ForestRegistration(QWidget* parent)
@@ -91,12 +87,13 @@ void ForestRegistration::selectOutputDir()
 	_outputFileOfDir->setText(dir);
 }
 
-void ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
+bool ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger,
+	std::function<void()> onFinished)
 {
 	if (_inputFileOfSource->text().isEmpty() ||
 		_inputFileOfTarget->text().isEmpty() ||
 		_outputFileOfDir->text().isEmpty())
-		return;
+		return false;
 
 	ForestRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
@@ -109,21 +106,13 @@ void ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdi
 	params.icpThreshold      = _icpThreshold->text().toDouble();
 	params.normalGeoVerify   = _normalGeoVerify->text().toDouble();
 
-	if (progress)
-	{
-		progress->setLabelText(tr("Performing forest point cloud registration ..."));
-		progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint & ~Qt::WindowContextHelpButtonHint);
-		progress->setCancelButton(nullptr);
-		progress->show();
-		progress->raise();
-	}
-
-	// Use shared_ptr to keep this alive during the background task
-	auto self = shared_from_this();
-	QFuture<void> future = QtConcurrent::run([self, params, logger]() {
-		self->registration(params, logger);
-	});
-	runFutureBlocking(future);
+	if (!progress)
+		return false;
+	registrationui::start(progress, logger, tr("Loading forest point clouds ..."),
+		std::move(onFinished), [params](QPointer<QTextEdit> loggerGuard, registrationui::ProgressReporter report) {
+			registration(params, loggerGuard, report);
+		});
+	return true;
 }
 
 void ForestRegistration::apply()
@@ -146,7 +135,8 @@ void ForestRegistration::initParam()
 	_normalGeoVerify->setText("1.0");
 }
 
-void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
+void ForestRegistration::registration(ForestRegParams params, QPointer<QTextEdit> logger,
+	std::function<void(int, const QString&)> reportProgress)
 {
 	try {
 		std::string sourceFile = params.sourceFile.toStdString();
@@ -221,6 +211,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 		logToLoggerForest(logger, tr("Target points: %1\n").arg(target_cloud->size()));
 
 		logToLoggerForest(logger, tr("Loading source point cloud...") + "\n");
+		reportProgress(10, tr("Loading source point cloud ..."));
 		pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 		try {
 			if (!loadPointCloud(sourceFile, source_cloud)) return;
@@ -236,6 +227,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 
 		// --- Step 3: Generate descriptors for target ---
 		logToLoggerForest(logger, tr("Generating triangle descriptors for target cloud...") + "\n");
+		reportProgress(20, tr("Generating target triangle descriptors ..."));
 		HashRegDescManager* hashReg = nullptr;
 		try {
 			hashReg = new HashRegDescManager(config_setting);
@@ -257,6 +249,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 
 		// --- Step 4: Generate descriptors for source ---
 		logToLoggerForest(logger, tr("Generating triangle descriptors for source cloud...") + "\n");
+		reportProgress(40, tr("Generating source triangle descriptors ..."));
 		FrameInfo source_info;
 		try {
 			hashReg->GenTriDescs(source_cloud, source_info);
@@ -269,6 +262,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 
 		// --- Step 5: Search for matching triangle pairs (coarse registration) ---
 		logToLoggerForest(logger, tr("Searching for matching triangle pairs...") + "\n");
+		reportProgress(60, tr("Searching matching triangle pairs ..."));
 		std::pair<int, double> search_result(-1, 0);
 		std::pair<Eigen::Vector3d, Eigen::Matrix3d> coarse_transform;
 		coarse_transform.first << 0, 0, 0;
@@ -294,6 +288,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 
 		// --- Step 6: Fine registration (small_gicp) ---
 		logToLoggerForest(logger, tr("Performing fine registration (Small-GICP)...") + "\n");
+		reportProgress(75, tr("Refining registration with Small-GICP ..."));
 		std::pair<Eigen::Vector3d, Eigen::Matrix3d> refine_transform;
 		try {
 			small_gicp_registration(source_cloud, target_cloud, refine_transform);
@@ -322,6 +317,7 @@ void ForestRegistration::registration(ForestRegParams params, QTextEdit* logger)
 		std::string outFile = outputDir + "/" + sourcePath.stem().string() + "_to_" + targetPath.stem().string() + "_transformationMatrix.txt";
 
 		std::ofstream dataOut(outFile);
+		reportProgress(90, tr("Saving transformation and point cloud ..."));
 		if (!dataOut)
 		{
 			logToLoggerForest(logger, tr("Failed to create transformation matrix file!\n"));

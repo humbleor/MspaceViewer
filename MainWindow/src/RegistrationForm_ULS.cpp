@@ -1,11 +1,10 @@
 #include "../include/RegistrationForm_ULS.h"
-#include "../include/RunFuture.h"
+#include "../include/AsyncRegistration.h"
+#include <algorithm>
 
-static void logToLoggerULS(QTextEdit* logger, const QString& text)
+static void logToLoggerULS(QPointer<QTextEdit> logger, const QString& text)
 {
-	QMetaObject::invokeMethod(logger, [logger, text]() {
-		logger->insertPlainText(text);
-	}, Qt::QueuedConnection);
+	registrationui::log(logger, text);
 }
 
 RegistrationULS::RegistrationULS(QWidget* parent)
@@ -29,7 +28,7 @@ RegistrationULS::~RegistrationULS()
 
 void RegistrationULS::reject()
 {
-	this->done(QDialog::Rejected); // ����ֱ�� this->reject();
+	this->done(QDialog::Rejected); // 等同于 this->reject();
 }
 
 void RegistrationULS::selectInputFileOfSource()
@@ -82,7 +81,8 @@ struct ULSRegParams {
 	float a3DThe;
 };
 
-void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
+bool RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* logger,
+	std::function<void()> onFinished)
 {
 	if (_resolution->text().isEmpty() ||
 		_gridStep->text().isEmpty() ||
@@ -92,7 +92,7 @@ void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* 
 		_angleThe->text().isEmpty() ||
 		_a2DThe->text().isEmpty() ||
 		_a3DThe->text().isEmpty())
-		return;
+		return false;
 
 	ULSRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
@@ -107,16 +107,13 @@ void RegistrationULS::executeRegistration(QProgressDialog* progress, QTextEdit* 
 	params.a2DThe = _a2DThe->text().toFloat();
 	params.a3DThe = _a3DThe->text().toFloat();
 
-	if (progress)
-	{
-		progress->setLabelText(tr("Performing point cloud registration ..."));
-		progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint & ~Qt::WindowContextHelpButtonHint);
-		progress->setCancelButton(nullptr);
-		progress->show();
-		progress->raise();
-	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&RegistrationULS::registration, this, params, logger));
-	runFutureBlocking(future);
+	if (!progress)
+		return false;
+	registrationui::start(progress, logger, tr("Loading point clouds ..."),
+		std::move(onFinished), [params](QPointer<QTextEdit> loggerGuard, registrationui::ProgressReporter report) {
+			registration(params, loggerGuard, report);
+		});
+	return true;
 }
 
 void RegistrationULS::initParam()
@@ -131,7 +128,8 @@ void RegistrationULS::initParam()
 	_a3DThe->setText("0.1");
 }
 
-void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
+void RegistrationULS::registration(ULSRegParams params, QPointer<QTextEdit> logger,
+	std::function<void(int, const QString&)> reportProgress)
 {
 	float resolution = params.resolution;
 	float gridStep = params.gridStep;
@@ -146,6 +144,7 @@ void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
 	PointCloud3fPtr tls = std::make_shared<PointCloud3f>();
 	loadLasFile(params.sourceFile.toStdString(), uav);
 	loadLasFile(params.targetFile.toStdString(), tls);
+	reportProgress(10, tr("Filtering and matching point clouds ..."));
 
 	std::shared_ptr<RegistrationU2T> u2t = std::make_shared<RegistrationU2T>(uav, tls);
 	u2t->setGridFilterRes(resolution);
@@ -154,7 +153,21 @@ void RegistrationULS::registration(ULSRegParams params, QTextEdit* logger)
 	u2t->setRadiusStep(radiusStep);
 	u2t->setNumSectors(numSectors);
 	u2t->descriptorsThreshold(angleThe, a2DThe, a3DThe);
-	u2t->registration();
+	u2t->setProgressCallback([reportProgress](int value) {
+		static const char* stages[] = {
+			"Filtering point clouds ...", "Rasterizing source cloud ...",
+			"Filtering target cloud ...", "Finding initial correspondences ...",
+			"Matching descriptors ...", "Estimating coarse transform ...",
+			"Refining with ICP ..."
+		};
+		const int index = std::clamp((value - 10) / 10, 0, 6);
+		reportProgress(value, RegistrationULS::tr(stages[index]));
+	});
+	if (!u2t->registration()) {
+		logToLoggerULS(logger, tr("Registration failed: no valid point-cloud correspondences found.\n"));
+		return;
+	}
+	reportProgress(90, tr("Saving registration results ..."));
 	std::array<std::array<float, 4>, 4> coarseMatrix = u2t->getCoarseMatrix();
 	std::array<std::array<float, 4>, 4> icpMatrix = u2t->getIcpMatrix();
 	std::array<std::array<float, 4>, 4> totalMatrix = u2t->getTotalMatrix();

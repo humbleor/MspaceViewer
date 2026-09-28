@@ -170,7 +170,7 @@ void OSGRenderer::setupOSG(int windowWidth, int windowHeight, float windowScale)
     _camera->setViewport(new osg::Viewport(0, 0, w, h));
     _camera->setGraphicsContext(m_osgWinEmb.get());
 
-    // ·ÅÔÚ×îºó£¬È·±£ viewport ºÍ GC ¶¼ÉèÖÃºÃ
+    // æ”¾åœ¨æœ€åŽï¼Œç¡®ä¿ viewport å’Œ GC éƒ½è®¾ç½®å¥½
     m_osgWinEmb->getEventQueue()->syncWindowRectangleWithGraphicsContext();
 
     setKeyEventSetsDone(0);

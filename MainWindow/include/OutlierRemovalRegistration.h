@@ -6,6 +6,8 @@
 #include <QtWidgets/QDialog>
 #include <QFileDialog>
 #include <QTextEdit>
+#include <QPointer>
+#include <functional>
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <Preparation.h>
@@ -13,7 +15,7 @@
 #include <IntervalStabbing.h>
 #include <Decoupling.h>
 
-#include <pcl/io/pcd_io.h>//pcd ��д����ص�ͷ�ļ���
+#include <pcl/io/pcd_io.h>// PCD 文件读写头文件
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 
@@ -24,17 +26,17 @@ public:
 	explicit OutlierRemovalRegistration(QWidget* parent = nullptr);
 	~OutlierRemovalRegistration();
 
-	//ִ��ע��
-	void executeRegistration(QProgressDialog* progress, QTextEdit* logger);
+	// 执行配准
+	bool executeRegistration(QProgressDialog* progress, QTextEdit* logger, std::function<void()> onFinished);
 
 private slots:
 	void apply();
 	void reject();
-	//ѡ�������Դ����
+	// 选择源点云文件
 	void selectInputFileOfSource();
-	//ѡ�������Ŀ�����
+	// 选择目标点云文件
 	void selectInputFileOfTarget();
-	// ѡ�����·��
+	// 选择输出目录
 	void selectOutputDir();
 
 private:
@@ -48,6 +50,7 @@ private:
 		float resolution_dis;
 	};
 
-	void registration(ORRRegParams params, QTextEdit* logger);
+	static void registration(ORRRegParams params, QPointer<QTextEdit> logger,
+		std::function<void(int, const QString&)> reportProgress);
 
 };

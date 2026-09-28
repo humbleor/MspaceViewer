@@ -34,7 +34,7 @@ using KDTree3d = KDTreePointCloudAdaptor<double, 3>;
 using KDTree3dPtr = std::shared_ptr<KDTree3d>;
 using PCAEstimator3d = PCAEstimator<double, 3>;
 
-// ÓÃÓÚ unordered_map µÄ hash º¯Êý
+// ç”¨äºŽ unordered_map çš„ hash å‡½æ•°
 struct pair_hash {
     std::size_t operator()(const std::pair<int, int>& p) const noexcept {
         return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);

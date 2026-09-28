@@ -18,16 +18,16 @@ public:
     osgDB_bin();
     ~osgDB_bin();
 
-    //²å¼şÀàÃû³Æ
+    //æ’ä»¶ç±»åç§°
     const char* className() const;
 
-    //¼ì²é²å¼şÊÇ·ñÖ§³ÖÀ©Õ¹Ãû
+    //æ£€æŸ¥æ’ä»¶æ˜¯å¦æ”¯æŒæ‰©å±•å
     bool acceptsExtension(const std::string& extension) const;
 
-    //¶ÁÈ¡½Úµã
+    //è¯»å–èŠ‚ç‚¹
     ReadResult readNode(const std::string& fileName, const osgDB::ReaderWriter::Options* options)const;
     WriteResult writeNode(const osg::Node& node, const std::string& fileName, const osgDB::ReaderWriter::Options* options)const;
 
 };
-//²å¼ş×¢²á£¬¶¨ÒåÈ«¾Ö±äÁ¿
+//æ’ä»¶æ³¨å†Œï¼Œå®šä¹‰å…¨å±€å˜é‡
 REGISTER_OSGPLUGIN(bin, osgDB_bin);

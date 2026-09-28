@@ -5,6 +5,8 @@
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <QTextEdit>
+#include <QPointer>
+#include <functional>
 #include <RegistrationU2T.h>
 #include <LoadLasFile.h>
 
@@ -17,16 +19,16 @@ public:
 	explicit RegistrationULS(QWidget* parent = nullptr);
 	~RegistrationULS();
 
-	void executeRegistration(QProgressDialog* progress, QTextEdit* logger);
+	bool executeRegistration(QProgressDialog* progress, QTextEdit* logger, std::function<void()> onFinished);
 
 private slots:
 	void apply();
 	void reject();
-	//ѡ�������Դ����
+	// 选择源点云文件
 	void selectInputFileOfSource();
-	//ѡ�������Ŀ�����
+	// 选择目标点云文件
 	void selectInputFileOfTarget();
-	// ѡ�����·��
+	// 选择输出目录
 	void selectOutputDir();
 
 
@@ -48,6 +50,7 @@ private:
 
 	void initParam();
 
-	void registration(ULSRegParams params, QTextEdit* logger);
+	static void registration(ULSRegParams params, QPointer<QTextEdit> logger,
+		std::function<void(int, const QString&)> reportProgress);
 
 };

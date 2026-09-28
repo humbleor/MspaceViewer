@@ -47,6 +47,7 @@ set(MAIN_SOURCES
 
 set(MAIN_HEADERS
     include/MainWindow.h
+    include/AsyncRegistration.h
     include/FormSettings.h
     include/RegistrationForm_ULS.h
     include/RegistrationForm_TLS.h

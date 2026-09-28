@@ -1,15 +1,15 @@
 #pragma once
 
 #include "nanoflann.hpp"
-#include "PointCloud.hpp"  // ÄúµÄ PointCloud Í·ÎÄ¼ş
+#include "PointCloud.hpp"  // æ‚¨çš„ PointCloud å¤´æ–‡ä»¶
 
 /**
- * @brief nanoflann KDTree ÊÊÅäÆ÷£¬ÊÊÅä×Ô¶¨ÒåµÄ PointCloud Àà
+ * @brief nanoflann KDTree é€‚é…å™¨ï¼Œé€‚é…è‡ªå®šä¹‰çš„ PointCloud ç±»
  *
- * @tparam T ×ø±êÊı¾İÀàĞÍ£¨Èç float/double£©
- * @tparam D µãÔÆÎ¬¶È£¨Èç3±íÊ¾3DµãÔÆ£©
- * @tparam Distance ¾àÀë¶ÈÁ¿£¨Ä¬ÈÏL2£©
- * @tparam IndexType Ë÷ÒıÀàĞÍ£¨Ä¬ÈÏsize_t£©
+ * @tparam T åæ ‡æ•°æ®ç±»å‹ï¼ˆå¦‚ float/doubleï¼‰
+ * @tparam D ç‚¹äº‘ç»´åº¦ï¼ˆå¦‚3è¡¨ç¤º3Dç‚¹äº‘ï¼‰
+ * @tparam Distance è·ç¦»åº¦é‡ï¼ˆé»˜è®¤L2ï¼‰
+ * @tparam IndexType ç´¢å¼•ç±»å‹ï¼ˆé»˜è®¤size_tï¼‰
  */
 template <
     typename T, int D = 3,
@@ -22,15 +22,15 @@ public:
     using metric_t = typename Distance::template traits<T, self_t>::distance_t;
     using index_t = nanoflann::KDTreeSingleIndexAdaptor<metric_t, self_t, D, IndexType>;
 
-    // KDTree Ë÷ÒıÖ¸Õë
+    // KDTree ç´¢å¼•æŒ‡é’ˆ
     index_t* index = nullptr;
 
     /**
-     * @brief ¹¹Ôìº¯Êı
+     * @brief æ„é€ å‡½æ•°
      *
-     * @param cloud µãÔÆÊı¾İ£¨±ØĞë·Ç¿Õ£©
-     * @param leaf_max_size Ò¶×Ó½Úµã×î´óµãÊı£¨Ä¬ÈÏ10£©
-     * @param n_thread_build ¹¹½¨Ïß³ÌÊı£¨Ä¬ÈÏµ¥Ïß³Ì£©
+     * @param cloud ç‚¹äº‘æ•°æ®ï¼ˆå¿…é¡»éç©ºï¼‰
+     * @param leaf_max_size å¶å­èŠ‚ç‚¹æœ€å¤§ç‚¹æ•°ï¼ˆé»˜è®¤10ï¼‰
+     * @param n_thread_build æ„å»ºçº¿ç¨‹æ•°ï¼ˆé»˜è®¤å•çº¿ç¨‹ï¼‰
      */
     explicit KDTreePointCloudAdaptor(
         const PointCloud<T, D>& cloud,
@@ -38,18 +38,18 @@ public:
         unsigned int n_thread_build = 1
     ) : m_pointcloud(cloud)
     {
-        // ¼ì²éµãÔÆÓĞĞ§ĞÔ
+        // æ£€æŸ¥ç‚¹äº‘æœ‰æ•ˆæ€§
         if (cloud.size() == 0)
             throw std::runtime_error("Point cloud is empty!");
 
-        // Î¬¶È¼ì²é£¨Èç¹ûD>0£©
+        // ç»´åº¦æ£€æŸ¥ï¼ˆå¦‚æœD>0ï¼‰
         if (D > 0 && cloud.points()[0].coords().size() != D)
             throw std::runtime_error("Point dimension mismatch!");
 
-        // ´´½¨Ë÷Òı
+        // åˆ›å»ºç´¢å¼•
         index = new index_t(
-            D,  // Î¬¶È
-            *this,  // ÊÊÅäÆ÷ÒıÓÃ
+            D,  // ç»´åº¦
+            *this,  // é€‚é…å™¨å¼•ç”¨
             nanoflann::KDTreeSingleIndexAdaptorParams(
                 leaf_max_size,
                 nanoflann::KDTreeSingleIndexAdaptorFlags::None,
@@ -57,19 +57,19 @@ public:
             )
         );
 
-        // ¹¹½¨Ë÷Òı
+        // æ„å»ºç´¢å¼•
         index->buildIndex();
     }
 
     ~KDTreePointCloudAdaptor() { delete index; }
 
     /**
-     * @brief ²éÑ¯×î½üÁÚ
+     * @brief æŸ¥è¯¢æœ€è¿‘é‚»
      *
-     * @param query_point ²éÑ¯µã×ø±êÊı×é£¨³¤¶È=D£©
-     * @param num_closest ĞèÒª·µ»ØµÄ×î½üÁÚÊıÁ¿
-     * @param out_indices Êä³ö£º×î½üÁÚË÷ÒıÊı×é
-     * @param out_distances_sq Êä³ö£ºÆ½·½¾àÀëÊı×é
+     * @param query_point æŸ¥è¯¢ç‚¹åæ ‡æ•°ç»„ï¼ˆé•¿åº¦=Dï¼‰
+     * @param num_closest éœ€è¦è¿”å›çš„æœ€è¿‘é‚»æ•°é‡
+     * @param out_indices è¾“å‡ºï¼šæœ€è¿‘é‚»ç´¢å¼•æ•°ç»„
+     * @param out_distances_sq è¾“å‡ºï¼šå¹³æ–¹è·ç¦»æ•°ç»„
      */
     void query(
         const T* query_point,
@@ -83,21 +83,21 @@ public:
         index->findNeighbors(result, query_point);
     }
 
-    // ----------------- nanoflann ½Ó¿ÚÊµÏÖ -----------------
+    // ----------------- nanoflann æ¥å£å®ç° -----------------
     const self_t& derived() const { return *this; }
     self_t& derived() { return *this; }
 
-    // ·µ»ØµãÔÆÖĞµÄµãÊı
+    // è¿”å›ç‚¹äº‘ä¸­çš„ç‚¹æ•°
     inline size_t kdtree_get_point_count() const {
         return m_pointcloud.size();
     }
 
-    // ·µ»ØµÚidx¸öµãµÄµÚdimÎ¬×ø±ê
+    // è¿”å›ç¬¬idxä¸ªç‚¹çš„ç¬¬dimç»´åæ ‡
     inline T kdtree_get_pt(const size_t idx, const size_t dim) const {
         return m_pointcloud.points()[idx].coords()[dim];
     }
 
-    // ¿ÉÑ¡£º·µ»ØµãÔÆ°üÎ§ºĞ£¨¼ÓËÙ¹¹½¨£©
+    // å¯é€‰ï¼šè¿”å›ç‚¹äº‘åŒ…å›´ç›’ï¼ˆåŠ é€Ÿæ„å»ºï¼‰
     template <class BBOX>
     bool kdtree_get_bbox(BBOX& bb) const {
         const auto& box = m_pointcloud.boundingBox();
@@ -107,9 +107,9 @@ public:
             bb[i].low = min[i];
             bb[i].high = max[i];
         }
-        return true; // ±íÊ¾ÒÑÌá¹©°üÎ§ºĞ
+        return true; // è¡¨ç¤ºå·²æä¾›åŒ…å›´ç›’
     }
 
 private:
-    const PointCloud<T, D>& m_pointcloud; // µãÔÆÊı¾İÒıÓÃ
+    const PointCloud<T, D>& m_pointcloud; // ç‚¹äº‘æ•°æ®å¼•ç”¨
 };

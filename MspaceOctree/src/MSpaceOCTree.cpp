@@ -124,18 +124,18 @@ std::string MSpaceOCTree::convertToLas(const std::string& filePath, const std::s
 
 bool MSpaceOCTree::filesConverter(osg::ref_ptr<osg::MSpaceNode> lodStructure)
 {
-    //����Դ�ļ�·���������ļ��Ļ�����Ϣ
+    // 整理源文件路径并获取输入文件的基本信息
     auto [name, sources] = curateSources(_options.source);
     if (_options.name.size() == 0) {
         _options.name = name;
     }
 
-    //��������_options�е���Ϣ��ȷ������ļ���������������
+    // 根据配置和源文件确定输出属性
     auto outputAttributes = computeOutputAttributes(sources, _options.attributes);
 
-    //��ȡ�������ݵ����ֵ����Сֵ�����Ƹ�����ռ�ÿռ�
+    // 统计输入点云的范围和数据量
     auto stats = computeStats(sources);
-    //����ļ�·��
+    // 输出目录
     string targetDir = _options.outdir;
     targetDir = targetDir;
     fs::create_directories(targetDir);
@@ -157,7 +157,7 @@ bool MSpaceOCTree::filesConverter(osg::ref_ptr<osg::MSpaceNode> lodStructure)
 }
 
 
-//����·�����ƺ������ļ��Ļ�����Ϣ
+// 整理路径和输入文件的基本信息
 Curated MSpaceOCTree::curateSources(vector<string> paths)
 {
 

@@ -6,6 +6,7 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/registration/icp.h>
 #include <pcl/search/kdtree.h>
+#include <utility>
 
 RegistrationU2T::RegistrationU2T(PointCloud3fPtr UAV, PointCloud3fPtr TLS)
     : _UAV(UAV), _TLS(TLS)
@@ -23,6 +24,7 @@ void RegistrationU2T::setSearchRadius(float radius) { _radius = radius; }
 void RegistrationU2T::setRadiusStep(float radiusStep) { _radiusStep = radiusStep; }
 void RegistrationU2T::setNumSectors(size_t numSectors) { _numSectors = numSectors; }
 void RegistrationU2T::setTLSCenter(Point3f centerTLS) { _centerTLS = centerTLS; }
+void RegistrationU2T::setProgressCallback(std::function<void(int)> callback) { _progressCallback = std::move(callback); }
 void RegistrationU2T::descriptorsThreshold(float angleThe, float a2DThe, float a3DThe)
 {
     _angleThreshold = angleThe;
@@ -36,10 +38,14 @@ bool RegistrationU2T::registration()
         std::cout << "Invalid input point clouds." << std::endl;
         return false;
     }
+    if (_progressCallback) _progressCallback(15);
     gridminimumFilter();
+    if (_progressCallback) _progressCallback(25);
     rasterization();
+    if (_progressCallback) _progressCallback(35);
     TLSfilter();
     std::vector<std::pair<int, int>> potentialCor;
+    if (_progressCallback) _progressCallback(45);
     initialCorrespondences(potentialCor);
     if (potentialCor.empty())
     {
@@ -48,11 +54,14 @@ bool RegistrationU2T::registration()
     }
     size_t rotationTLS = 0;
     std::pair<int, int> optimalCor;
+    if (_progressCallback) _progressCallback(55);
     descriptorsMatchting(potentialCor, rotationTLS, optimalCor);
     _UAVFilter->clear();
     _TLSFilter->clear();
     _points_in_grid.clear();
+    if (_progressCallback) _progressCallback(65);
     coarseRegistration(potentialCor, rotationTLS, optimalCor);
+    if (_progressCallback) _progressCallback(75);
     fineRegistration();
     return true;
 }

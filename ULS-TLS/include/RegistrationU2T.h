@@ -5,6 +5,7 @@
 #include <omp.h>
 #include "LoadLasFile.h"
 #include "dll_expoart.h"
+#include <functional>
 struct correspondence
 {
     size_t index_TLS;
@@ -22,6 +23,7 @@ public:
     void setNumSectors(size_t numSectors);
     void setTLSCenter(Point3f centerTLS);
     void descriptorsThreshold(float angleThe, float a2DThe, float a3DThe);
+    void setProgressCallback(std::function<void(int)> callback);
     bool registration();
     std::array<std::array<float, 4>, 4> getCoarseMatrix() const;
     std::array<std::array<float, 4>, 4> getIcpMatrix() const;
@@ -65,4 +67,5 @@ private:
     std::array<std::array<float, 4>, 4> _transformationMatrix;
     std::array<std::array<float, 4>, 4> _icpMatrix;
     std::array<std::array<float, 4>, 4> _totalMatrix;
+    std::function<void(int)> _progressCallback;
 };

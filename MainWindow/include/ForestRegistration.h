@@ -6,6 +6,8 @@
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
 #include <QTextEdit>
+#include <QPointer>
+#include <functional>
 
 #include <filesystem>
 #include <fstream>
@@ -24,14 +26,14 @@ struct ForestRegParams {
 	double normalGeoVerify = 1.0;
 };
 
-class ForestRegistration :public QDialog, public Ui::ForestRegistration, public std::enable_shared_from_this<ForestRegistration>
+class ForestRegistration :public QDialog, public Ui::ForestRegistration
 {
 	Q_OBJECT
 public:
 	explicit ForestRegistration(QWidget* parent = nullptr);
 	~ForestRegistration();
 
-	void executeRegistration(QProgressDialog* progress, QTextEdit* logger);
+	bool executeRegistration(QProgressDialog* progress, QTextEdit* logger, std::function<void()> onFinished);
 
 private slots:
 	void apply();
@@ -42,6 +44,7 @@ private slots:
 
 private:
 	void initParam();
-	void registration(ForestRegParams params, QTextEdit* logger);
+	static void registration(ForestRegParams params, QPointer<QTextEdit> logger,
+		std::function<void(int, const QString&)> reportProgress);
 
 };

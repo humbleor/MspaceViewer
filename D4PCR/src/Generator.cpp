@@ -32,7 +32,7 @@ Eigen::Matrix4d Generator::getTransformation()
 void Generator::randomPointGenerator(unsigned int number)
 {
 	pcl::PointXYZ point;
-	// Ê¹ÓÃµ±Ç°Ê±¼ä×÷ÎªÖÖ×Ó
+	// ä½¿ç”¨å½“å‰æ—¶é—´ä½œä¸ºç§å­
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 	std::default_random_engine generator(seed);
 	std::uniform_real_distribution<double> distribution(-1.0, 1.0);
@@ -53,7 +53,7 @@ void Generator::gaussiamNoiseGenerator()
 	std::default_random_engine generator(seed);
 
 	std::normal_distribution<double> distribution(0.0, 0.005);
-	std::uniform_real_distribution<double> angle_range(-M_PI, M_PI);  // Ëæ»ú½Ç¶È·Ö²¼
+	std::uniform_real_distribution<double> angle_range(-M_PI, M_PI);  // éšæœºè§’åº¦åˆ†å¸ƒ
 
 	for (size_t i = 0; i < target->points.size(); i++)
 	{
@@ -62,12 +62,12 @@ void Generator::gaussiamNoiseGenerator()
 		double theta = angle_range(generator);
 		double phi = angle_range(generator);
 
-		// ¼ÆËãÔëÉùµÄ·½ÏòÏòÁ¿
+		// è®¡ç®—å™ªå£°çš„æ–¹å‘å‘é‡
 		double dx = gnoise * std::sin(phi) * std::cos(theta);
 		double dy = gnoise * std::sin(phi) * std::sin(theta);
 		double dz = gnoise * std::cos(phi);
 
-		// ½«ÔëÉùÌí¼Óµ½µãµÄ×ø±êÉÏ
+		// å°†å™ªå£°æ·»åŠ åˆ°ç‚¹çš„åæ ‡ä¸Š
 		target->points[i].x += dx;
 		target->points[i].y += dy;
 		target->points[i].z += dz;
@@ -79,11 +79,11 @@ void Generator::gaussiamNoiseGenerator()
 		//std::cout << "gnoise:" << gnoise << std::endl;
 		double theta = angle_range(generator);
 		double phi = angle_range(generator);
-		// ¼ÆËãÔëÉùµÄ·½ÏòÏòÁ¿
+		// è®¡ç®—å™ªå£°çš„æ–¹å‘å‘é‡
 		double dx = gnoise * std::sin(phi) * std::cos(theta);
 		double dy = gnoise * std::sin(phi) * std::sin(theta);
 		double dz = gnoise * std::cos(phi);
-		// ½«ÔëÉùÌí¼Óµ½µãµÄ×ø±êÉÏ
+		// å°†å™ªå£°æ·»åŠ åˆ°ç‚¹çš„åæ ‡ä¸Š
 		source->points[i].x += dx;
 		source->points[i].y += dy;
 		source->points[i].z += dz;

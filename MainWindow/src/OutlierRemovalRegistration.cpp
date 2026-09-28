@@ -1,11 +1,9 @@
 #include "../include/OutlierRemovalRegistration.h"
-#include "../include/RunFuture.h"
+#include "../include/AsyncRegistration.h"
 
-static void logToLoggerORR(QTextEdit* logger, const QString& text)
+static void logToLoggerORR(QPointer<QTextEdit> logger, const QString& text)
 {
-	QMetaObject::invokeMethod(logger, [logger, text]() {
-		logger->insertPlainText(text);
-	}, Qt::QueuedConnection);
+	registrationui::log(logger, text);
 }
 
 OutlierRemovalRegistration::OutlierRemovalRegistration(QWidget* parent)
@@ -70,7 +68,8 @@ struct ORRRegParams {
 	float resolution_dis;
 };
 
-void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger)
+bool OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger,
+	std::function<void()> onFinished)
 {
 	ORRRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
@@ -80,28 +79,25 @@ void OutlierRemovalRegistration::executeRegistration(QProgressDialog* progress, 
 	params.resolution_dis = _resolution_dis->text().isEmpty() ? 0.0f : _resolution_dis->text().toFloat();
 
 	if (params.resolution_dis == 0.0f)
-		return;
+		return false;
 
-	if (progress)
-	{
-		progress->setLabelText(tr("Performing point cloud registration ..."));
-		progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint & ~Qt::WindowContextHelpButtonHint);
-		progress->setCancelButton(nullptr);
-		progress->show();
-		progress->raise();
-	}
-	QFuture<void> future = QtConcurrent::run(std::bind(&OutlierRemovalRegistration::registration, this, params, logger));
-	runFutureBlocking(future);
+	if (!progress)
+		return false;
+	registrationui::start(progress, logger, tr("Building point-cloud correspondences ..."),
+		std::move(onFinished), [params](QPointer<QTextEdit> loggerGuard, registrationui::ProgressReporter report) {
+			registration(params, loggerGuard, report);
+		});
+	return true;
 }
 
 void OutlierRemovalRegistration::apply()
 {
-	this->done(QDialog::Accepted); // ����ֱ�� this->accept();
+	this->done(QDialog::Accepted); // 等同于 this->accept();
 }
 
 void OutlierRemovalRegistration::reject()
 {
-	this->done(QDialog::Rejected); // ����ֱ�� this->reject();
+	this->done(QDialog::Rejected); // 等同于 this->reject();
 }
 
 void OutlierRemovalRegistration::initParam()
@@ -109,7 +105,8 @@ void OutlierRemovalRegistration::initParam()
 	_resolution_dis->setText("0.1");
 }
 
-void OutlierRemovalRegistration::registration(ORRRegParams params, QTextEdit* logger)
+void OutlierRemovalRegistration::registration(ORRRegParams params, QPointer<QTextEdit> logger,
+	std::function<void(int, const QString&)> reportProgress)
 {
 	bool isCenter = params.isCenter;
 	float resolution = params.resolution_dis;
@@ -124,6 +121,7 @@ void OutlierRemovalRegistration::registration(ORRRegParams params, QTextEdit* lo
 	std::shared_ptr<RelationshipConstruction> rc =
 		std::make_shared<RelationshipConstruction>(
 			sourceFile, targetFile, resolution, isCenter);
+	reportProgress(50, tr("Solving robust transformation ..."));
 
 	cors = rc->getCorrespondences();
 	sampledCloudS = rc->getPointCloudS();
@@ -131,6 +129,7 @@ void OutlierRemovalRegistration::registration(ORRRegParams params, QTextEdit* lo
 
 	Decoupling decoupling(sampledCloudS, sampledCloudT, cors, resolution);
 	Eigen::Matrix4d transformation_matrix = decoupling.getTransformation();
+	reportProgress(85, tr("Saving registration results ..."));
 
 	logToLoggerORR(logger, tr("Point cloud registration completed!") + "\n");
 	logToLoggerORR(logger, tr("===================================") + "\n");

@@ -3,8 +3,8 @@
 #include "utils.h"
 #include <laszip/laszip_api.h>
 
-// 加载las文件
+// 鍔犺浇las鏂囦欢
 void  DLL_EXPORT loadLasFile(std::string inputPath, PointCloud3fPtr pointcloud);
-// 输出las文件
+// 杈撳嚭las鏂囦欢
 void DLL_EXPORT outputLasFile(std::string outputPath, PointCloud3fPtr pointcloud);
 

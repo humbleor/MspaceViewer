@@ -1,6 +1,6 @@
 #include "PointCloud.hpp"
 
-// PCAEstimator¶¨Òå
+// PCAEstimatorå®šä¹‰
 template <typename T, size_t D>
 class PCAEstimator
 {
@@ -11,7 +11,7 @@ public:
     PCAEstimator(const PointCloud& cloud);
     ~PCAEstimator();
 
-    // Êä³ö£ºÌØÕ÷Öµ eigenvalues[D]£¨½µĞò£©£¬ÌØÕ÷ÏòÁ¿ eigenvectors[D][D]£¨ÁĞÎªÌØÕ÷ÏòÁ¿£©
+    // è¾“å‡ºï¼šç‰¹å¾å€¼ eigenvalues[D]ï¼ˆé™åºï¼‰ï¼Œç‰¹å¾å‘é‡ eigenvectors[D][D]ï¼ˆåˆ—ä¸ºç‰¹å¾å‘é‡ï¼‰
     bool compute();
 	std::array<T, D> eigenvalues() const { return _eigenvalues; }
 	std::array<std::array<T, D>, D> eigenvectors() const { return _eigenvectors; }
@@ -41,7 +41,7 @@ template<typename T, size_t D>
 bool PCAEstimator<T, D>::compute()
 {
 
-    // 2. ¼ÆËã¾ùÖµ
+    // 2. è®¡ç®—å‡å€¼
     std::array<T, D> mean = { 0 };
     for (const auto& pt : _cloud.points())
     {
@@ -51,7 +51,7 @@ bool PCAEstimator<T, D>::compute()
     for (size_t i = 0; i < D; ++i)
         mean[i] /= static_cast<T>(_cloud.points().size());
 
-    // 3. Ğ­·½²î¾ØÕó
+    // 3. åæ–¹å·®çŸ©é˜µ
     std::array<std::array<T, D>, D> cov{};
     for (const auto& pt : _cloud.points())
     {
@@ -69,14 +69,14 @@ bool PCAEstimator<T, D>::compute()
         for (size_t j = 0; j < D; ++j)
             cov[i][j] /= scale;
 
-    // 4. ÌØÕ÷·Ö½â£ºJacobi method£¨½öÖ§³Ö¶Ô³Æ¾ØÕó£©
+    // 4. ç‰¹å¾åˆ†è§£ï¼šJacobi methodï¼ˆä»…æ”¯æŒå¯¹ç§°çŸ©é˜µï¼‰
     return jacobiEigenDecomposition(cov, _eigenvalues, _eigenvectors);
 }
 
 template<typename T, size_t D>
 bool PCAEstimator<T, D>::jacobiEigenDecomposition(const std::array<std::array<T, D>, D>& A, std::array<T, D>& eigenvalues, std::array<std::array<T, D>, D>& eigenvectors, size_t max_iter, T tol)
 {
-    std::array<std::array<T, D>, D> V = {};  // ³õÊ¼Îªµ¥Î»¾ØÕó
+    std::array<std::array<T, D>, D> V = {};  // åˆå§‹ä¸ºå•ä½çŸ©é˜µ
     for (size_t i = 0; i < D; ++i)
         V[i][i] = 1;
 
@@ -84,7 +84,7 @@ bool PCAEstimator<T, D>::jacobiEigenDecomposition(const std::array<std::array<T,
 
     for (size_t iter = 0; iter < max_iter; ++iter)
     {
-        // ÕÒ×î´ó·Ç¶Ô½ÇÔª
+        // æ‰¾æœ€å¤§éå¯¹è§’å…ƒ
         size_t p = 0, q = 1;
         T max_val = std::abs(A_curr[0][1]);
         for (size_t i = 0; i < D; ++i)
@@ -108,7 +108,7 @@ bool PCAEstimator<T, D>::jacobiEigenDecomposition(const std::array<std::array<T,
         T cos_t = std::cos(theta);
         T sin_t = std::sin(theta);
 
-        // Ğı×ª A_curr
+        // æ—‹è½¬ A_curr
         std::array<std::array<T, D>, D> A_next = A_curr;
         for (size_t i = 0; i < D; ++i)
         {
@@ -127,7 +127,7 @@ bool PCAEstimator<T, D>::jacobiEigenDecomposition(const std::array<std::array<T,
 
         A_curr = A_next;
 
-        // Ğı×ª V
+        // æ—‹è½¬ V
         for (size_t i = 0; i < D; ++i)
         {
             T vip = V[i][p], viq = V[i][q];
@@ -136,15 +136,15 @@ bool PCAEstimator<T, D>::jacobiEigenDecomposition(const std::array<std::array<T,
         }
     }
 
-    // ÌáÈ¡ÌØÕ÷ÖµºÍÌØÕ÷ÏòÁ¿
+    // æå–ç‰¹å¾å€¼å’Œç‰¹å¾å‘é‡
     for (size_t i = 0; i < D; ++i)
     {
         eigenvalues[i] = A_curr[i][i];
         for (size_t j = 0; j < D; ++j)
-            eigenvectors[j][i] = V[j][i];  // Ã¿ÁĞÎªÌØÕ÷ÏòÁ¿
+            eigenvectors[j][i] = V[j][i];  // æ¯åˆ—ä¸ºç‰¹å¾å‘é‡
     }
 
-    // °´ÌØÕ÷Öµ½µĞòÅÅĞò
+    // æŒ‰ç‰¹å¾å€¼é™åºæ’åº
     std::array<size_t, D> indices;
     for (size_t i = 0; i < D; ++i) indices[i] = i;
 
