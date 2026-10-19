@@ -20,6 +20,7 @@
 #include <pcl/filters/voxel_grid.h>
 
 #include "../Forest_TLS_Reg/include/utils/HashRegObj.h"
+#include "utils/ForestPairRegistration.h"
 #include "../Forest_TLS_Reg/include/utils/Hlp.h"
 #include "../Forest_TLS_Reg/include/dst/DST.h"
 
@@ -37,6 +38,7 @@ void printUsage(const char* progName)
     std::cout << "  --source <path>    Source point cloud (required)" << std::endl;
     std::cout << "  --target <path>    Target / reference point cloud (required)" << std::endl;
     std::cout << "  --output <path>    Output directory (required)" << std::endl;
+    std::cout << "  --matrix-only      Save matrix and quality report without exporting the full cloud" << std::endl;
     std::cout << "  --config <path>    OpenCV-YAML config overriding ConfigSetting (optional)" << std::endl;
 }
 
@@ -45,6 +47,7 @@ struct CliArgs {
     std::string target;
     std::string output;
     std::string config;
+    bool matrixOnly = false;
 };
 
 bool parseArgs(int argc, char* argv[], CliArgs& p)
@@ -59,6 +62,7 @@ bool parseArgs(int argc, char* argv[], CliArgs& p)
         else if (a == "--target")  { auto v = need(a); if (!v) return false; p.target = v; }
         else if (a == "--output")  { auto v = need(a); if (!v) return false; p.output = v; }
         else if (a == "--config")  { auto v = need(a); if (!v) return false; p.config = v; }
+        else if (a == "--matrix-only") { p.matrixOnly = true; }
         else if (a == "--help" || a == "-h") { return false; }
         else { std::cerr << "Unknown argument: " << a << std::endl; return false; }
     }
@@ -107,7 +111,7 @@ bool loadPointCloud(const std::string& filePath,
 void saveMatrix(const std::string& path, const Eigen::Matrix4d& T)
 {
     std::ofstream out(path);
-    if (!out) { std::cerr << "Failed to open " << path << " for writing" << std::endl; return; }
+    if (!out) throw std::runtime_error("Cannot create matrix: " + path);
     out << std::fixed << std::setprecision(6);
     for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c)
@@ -126,6 +130,7 @@ void printMatrix(const Eigen::Matrix4d& T)
 
 int main(int argc, char* argv[])
 {
+    try {
     CliArgs args;
     if (!parseArgs(argc, argv, args)) { printUsage(argv[0]); return 1; }
 
@@ -137,7 +142,11 @@ int main(int argc, char* argv[])
     log("------------------------------------------------");
 
     // --- Step 1: ConfigSetting ---
-    ConfigSetting config_setting; // defaults from struct member initializers
+    ConfigSetting config_setting; // Same defaults as the GUI.
+    config_setting.rough_dis_threshold = 0.03;
+    config_setting.dist_candi_frames_verify = 1.0;
+    config_setting.use_matched_num = 4000;
+    config_setting.icp_threshold = 0.25;
     if (!args.config.empty()) {
         log("[config] loading " + args.config);
         ReadParas(args.config, config_setting);
@@ -161,71 +170,16 @@ int main(int argc, char* argv[])
     }
     log("[load] source: " + std::to_string(source_cloud->size()) + " points");
 
-    // --- Step 3: Build HashRegDescManager + target descriptors ---
-    log("[step1] generating triangle descriptors for target...");
-    HashRegDescManager* hashReg = new HashRegDescManager(config_setting);
-
-    FrameInfo reference_info;
-    hashReg->GenTriDescs(target_cloud, reference_info);
-    hashReg->AddTriDescs(reference_info);
-    log("[step1] target descriptors: " + std::to_string(reference_info.desc_.size()));
-
-    // --- Step 4: Source descriptors ---
-    log("[step2] generating triangle descriptors for source...");
-    FrameInfo source_info;
-    hashReg->GenTriDescs(source_cloud, source_info);
-    log("[step2] source descriptors: " + std::to_string(source_info.desc_.size()));
-
-    // --- Step 5: Coarse matching ---
-    log("[step3] searching for matching triangle pairs...");
-    std::pair<int, double> search_result(-1, 0.0);
-    std::pair<Eigen::Vector3d, Eigen::Matrix3d> coarse_transform;
-    coarse_transform.first << 0, 0, 0;
-    coarse_transform.second = Eigen::Matrix3d::Identity();
-    std::vector<std::pair<TriDesc, TriDesc>> loop_triangle_pair;
-
-    hashReg->SearchPosition(source_info, search_result, coarse_transform, loop_triangle_pair);
-
-    if (search_result.first == -1) {
-        std::cerr << "Error: no matching triangles found, aborting" << std::endl;
-        delete hashReg;
+    const auto result = forest::registerPair(source_cloud, target_cloud, config_setting,
+        [](int progress, const std::string& message) { log("[" + std::to_string(progress) + "%] " + message); });
+    const std::string reportName = std::filesystem::path(args.source).stem().string() + "_to_" +
+        std::filesystem::path(args.target).stem().string() + "_forest_quality.txt";
+    forest::savePairReport((std::filesystem::path(args.output) / reportName).string(), result);
+    if (!result.accepted) {
+        std::cerr << "Forest registration rejected: " << result.reason << std::endl;
         return 3;
     }
-    log("[step3] best frame=" + std::to_string(search_result.first)
-        + " score=" + std::to_string(search_result.second));
-
-    // --- Step 6: Fine registration (small_gicp) ---
-    // ponytail: small_gicp_registration copies every point into Eigen::Vector3d; with
-    // 100M+ points this OOMs. Downsample at 0.5m first — coarse alignment from the
-    // triangle descriptors above already compensates for the lost resolution.
-    log("[step4] downsampling to 0.5m for small_gicp...");
-    pcl::PointCloud<pcl::PointXYZ>::Ptr src_ds(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr tgt_ds(new pcl::PointCloud<pcl::PointXYZ>);
-    {
-        pcl::VoxelGrid<pcl::PointXYZ> vg;
-        vg.setLeafSize(0.5f, 0.5f, 0.5f);
-        vg.setInputCloud(source_cloud); vg.filter(*src_ds);
-        vg.setInputCloud(target_cloud); vg.filter(*tgt_ds);
-    }
-    log("[step4] downsampled: src=" + std::to_string(src_ds->size())
-        + " tgt=" + std::to_string(tgt_ds->size()));
-
-    log("[step4] fine registration (small_gicp)...");
-    std::pair<Eigen::Vector3d, Eigen::Matrix3d> refine_transform;
-    small_gicp_registration(src_ds, tgt_ds, refine_transform);
-
-    // --- Step 7: Combine transforms ---
-    Eigen::Matrix4d coarse_matrix = Eigen::Matrix4d::Identity();
-    coarse_matrix.block<3, 3>(0, 0) = coarse_transform.second;
-    coarse_matrix.block<3, 1>(0, 3) = coarse_transform.first;
-
-    Eigen::Matrix4d refine_matrix = Eigen::Matrix4d::Identity();
-    refine_matrix.block<3, 3>(0, 0) = refine_transform.second;
-    refine_matrix.block<3, 1>(0, 3) = refine_transform.first;
-
-    Eigen::Matrix4d final_matrix = refine_matrix * coarse_matrix;
-
-    delete hashReg;
+    const Eigen::Matrix4d final_matrix = result.transform;
 
     // --- Step 8: Save matrix + registered cloud ---
     const std::filesystem::path sourcePath(args.source);
@@ -239,6 +193,8 @@ int main(int argc, char* argv[])
     log("===================================");
     printMatrix(final_matrix);
     log("===================================");
+
+    if (args.matrixOnly) return 0;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr registered(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::transformPointCloud(*source_cloud, *registered, final_matrix.cast<float>());
@@ -256,4 +212,5 @@ int main(int argc, char* argv[])
     }
 
     return 0;
+    } catch (const std::exception& e) { std::cerr << e.what() << std::endl; return 2; }
 }

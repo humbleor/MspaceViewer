@@ -1,578 +1,584 @@
 #include "../include/Decoupling.h"
 
-Decoupling::Decoupling(PointCloudPtr sampledCloudS, PointCloudPtr sampledCloudT, pcl::Correspondences cors, float resolution)
+namespace
 {
-	//std::shared_ptr<AdjacencyMatrix> adjacency = std::make_shared<AdjacencyMatrix>(sampledCloudS, sampledCloudT, cors, resolution);
-	//Eigen::RowVectorXf weightInfor = adjacency->getWeightSet();
+constexpr float anglePi = static_cast<float>(M_PI);
+constexpr float twoAnglePi = 2.0f * anglePi;
 
-	decoupling(sampledCloudS, sampledCloudT, cors, resolution);
-	//computeTransformationMatrix(sampledCloudS, sampledCloudT);
+void appendAngularInterval(
+    float center,
+    float halfWidth,
+    Intervals& intervals,
+    std::vector<size_t>* correspondenceIndices = nullptr,
+    size_t correspondenceIndex = 0)
+{
+    if (!std::isfinite(center) || !std::isfinite(halfWidth) || halfWidth < 0.0f)
+        return;
 
+    const auto appendLinearInterval = [&](float left, float right)
+    {
+        intervals.push_back({ left, true });
+        intervals.push_back({ right, false });
+        if (correspondenceIndices)
+        {
+            correspondenceIndices->push_back(correspondenceIndex);
+            correspondenceIndices->push_back(correspondenceIndex);
+        }
+    };
+
+    if (halfWidth >= anglePi)
+    {
+        appendLinearInterval(-anglePi, anglePi);
+        return;
+    }
+
+    center = std::remainder(center, twoAnglePi);
+    const float left = center - halfWidth;
+    const float right = center + halfWidth;
+
+    if (left < -anglePi)
+    {
+        appendLinearInterval(-anglePi, right);
+        appendLinearInterval(left + twoAnglePi, anglePi);
+    }
+    else if (right > anglePi)
+    {
+        appendLinearInterval(left, anglePi);
+        appendLinearInterval(-anglePi, right - twoAnglePi);
+    }
+    else
+    {
+        appendLinearInterval(left, right);
+    }
+}
 }
 
-Decoupling::~Decoupling()
+const pcl::Correspondences& Decoupling::getStageCorrespondences(
+    std::size_t stageIndex) const noexcept
 {
+    switch (stageIndex)
+    {
+    case 0: return cors1;
+    case 1: return cors2;
+    case 2: return cors3;
+    default: return corsRes;
+    }
 }
 
-Eigen::Matrix4d Decoupling::getTransformation()
+Decoupling::Decoupling(
+    PointCloudPtr sampledCloudS,
+    PointCloudPtr sampledCloudT,
+    pcl::Correspondences cors,
+    float resolution,
+    const Eigen::Vector3d& gravityDirection,
+    bool verbose,
+    float angleResolutionDegrees,
+    bool enableAngleCandidatePruning,
+    bool swapVerticalAndRotationStages)
 {
-	return transformation;
+    if (!sampledCloudS || !sampledCloudT)
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: input cloud is null." << std::endl;
+        return;
+    }
+
+    if (!gravityDirection.allFinite() ||
+        gravityDirection.norm() <= std::numeric_limits<double>::epsilon())
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: gravity direction is invalid." << std::endl;
+        return;
+    }
+
+    const Eigen::Vector3d normalizedGravity = gravityDirection.normalized();
+    const Eigen::Matrix3d gravityAlignment =
+        Eigen::Quaterniond::FromTwoVectors(
+            normalizedGravity,
+            Eigen::Vector3d::UnitZ()).toRotationMatrix();
+
+    Eigen::Matrix4d alignmentTransformation = Eigen::Matrix4d::Identity();
+    alignmentTransformation.block<3, 3>(0, 0) = gravityAlignment;
+
+    PointCloudPtr alignedSource(new pcl::PointCloud<pcl::PointXYZ>);
+    PointCloudPtr alignedTarget(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::transformPointCloud(
+        *sampledCloudS,
+        *alignedSource,
+        alignmentTransformation.cast<float>());
+    pcl::transformPointCloud(
+        *sampledCloudT,
+        *alignedTarget,
+        alignmentTransformation.cast<float>());
+
+    decoupling(
+        alignedSource,
+        alignedTarget,
+        cors,
+        resolution,
+        verbose,
+        angleResolutionDegrees,
+        enableAngleCandidatePruning,
+        swapVerticalAndRotationStages);
+
+    if (valid)
+    {
+        transformation =
+            alignmentTransformation.inverse() *
+            transformation *
+            alignmentTransformation;
+    }
 }
 
-void Decoupling::decoupling(PointCloudPtr sampledCloudS, PointCloudPtr sampledCloudT, pcl::Correspondences cors, float resolution)
+void Decoupling::decoupling(
+    PointCloudPtr sampledCloudS,
+    PointCloudPtr sampledCloudT,
+    const pcl::Correspondences& cors,
+    float resolution,
+    bool verbose,
+    float angleResolutionDegrees,
+    bool enableAngleCandidatePruning,
+    bool swapVerticalAndRotationStages)
 {
-	std::cout << "==================Decoupling .....==================" << std::endl;
-	auto timeS = std::chrono::system_clock::now();
+    stageTimesSeconds.fill(0.0);
+    if (verbose)
+        std::cout << "==================Decoupling .....==================" << std::endl;
+    auto timeS = std::chrono::system_clock::now();
 
-	Intervals verticalTSet;
-	Interval verticalT;
+    if (!sampledCloudS || !sampledCloudT || sampledCloudS->empty() ||
+        sampledCloudT->empty() || cors.empty() ||
+        !std::isfinite(resolution) || resolution <= 0.0f ||
+        !std::isfinite(angleResolutionDegrees) ||
+        angleResolutionDegrees <= 0.0f)
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: invalid input or resolution." << std::endl;
+        return;
+    }
 
-	Eigen::Vector3f s_t(0.0f, 0.0f, 0.0f);
-	Eigen::Vector3f g(0.0f, 0.0f, 1.0f);
-	for (unsigned int index = 0; index < cors.size(); index++)
-	{
-		s_t[0] = sampledCloudT->points[cors[index].index_match].x - sampledCloudS->points[cors[index].index_query].x;
-		s_t[1] = sampledCloudT->points[cors[index].index_match].y - sampledCloudS->points[cors[index].index_query].y;
-		s_t[2] = sampledCloudT->points[cors[index].index_match].z - sampledCloudS->points[cors[index].index_query].z;
-		//s_tSet[index] = s_t;
+    auto stageStart = std::chrono::steady_clock::now();
 
-		verticalT.value = -resolution - g.dot(s_t);
-		verticalT.is_left = true;
-		//verticalT.weight = weightInfor[index];
-		verticalTSet.emplace_back(verticalT);
+    struct VerticalStageResult
+    {
+        pcl::Correspondences correspondences;
+        std::vector<size_t> selectedIndices;
+    };
+    struct RotationStageResult
+    {
+        pcl::Correspondences correspondences;
+        std::vector<size_t> selectedIndices;
+        std::array<float, 2> optimalInterval{ 0.0f, 0.0f };
+        size_t maximumConsensusSize{ 0 };
+    };
 
-		verticalT.value = resolution - g.dot(s_t);
-		verticalT.is_left = false;
-		//verticalT.weight = weightInfor[index];
-		verticalTSet.emplace_back(verticalT);
-	}
+    const auto buildEdges = [&](const pcl::Correspondences& input)
+    {
+        Edge2DSet edges;
+        edges.reserve(input.size());
+        for (const pcl::Correspondence& correspondence : input)
+        {
+            Edge2D edge;
+            const auto& sourcePoint =
+                sampledCloudS->points[correspondence.index_query];
+            const auto& targetPoint =
+                sampledCloudT->points[correspondence.index_match];
+            edge.first[0] = sourcePoint.x;
+            edge.first[1] = sourcePoint.y;
+            edge.second[0] = targetPoint.x;
+            edge.second[1] = targetPoint.y;
+            edges.emplace_back(edge);
+        }
+        return edges;
+    };
 
-	std::shared_ptr<IntervalStabbing> interV = std::make_shared<IntervalStabbing>(verticalTSet);
+    const auto runVerticalStage = [&](const pcl::Correspondences& input)
+    {
+        VerticalStageResult result;
+        Intervals intervals;
+        intervals.reserve(input.size() * 2);
+        for (const pcl::Correspondence& correspondence : input)
+        {
+            const float zDifference =
+                sampledCloudT->points[correspondence.index_match].z -
+                sampledCloudS->points[correspondence.index_query].z;
+            intervals.push_back({ -resolution - zDifference, true });
+            intervals.push_back({ resolution - zDifference, false });
+        }
+        if (intervals.empty())
+            return result;
+        IntervalStabbing stabbing(intervals);
+        float* optimum = stabbing.getOptimalValue();
+        result.correspondences.reserve(input.size());
+        result.selectedIndices.reserve(input.size());
+        for (size_t index = 0; index < intervals.size(); index += 2)
+        {
+            if (intervals[index].value > optimum[1])
+                continue;
+            if (intervals[index + 1].value < optimum[0])
+                continue;
+            result.correspondences.emplace_back(input[index / 2]);
+            result.selectedIndices.emplace_back(index / 2);
+        }
+        return result;
+    };
 
-	float* optimalZSet = interV->getOptimalValue();
-	//optimalZSet[0] = 1.40f;
-	//optimalZSet[1] = 1.45f;
-	pcl::Correspondences corsV;
-	std::vector<size_t> indicesV;
+    const auto runRotationStage = [&](const pcl::Correspondences& input)
+    {
+        RotationStageResult result;
+        const Edge2DSet edges = buildEdges(input);
+        const float deltaAngle =
+            angleResolutionDegrees * static_cast<float>(M_PI) / 180.0f;
+        std::vector<bool> usedIndex(edges.size(), false);
+        Intervals intervals;
+        std::vector<size_t> intervalIndices;
+        std::vector<size_t> supportedIndices;
 
-	for (size_t i = 0; i < verticalTSet.size(); i += 2)
-	{
-		if (verticalTSet[i].value > optimalZSet[1])
-			continue;
-		if (verticalTSet[i + 1].value < optimalZSet[0])
-			continue;
+        for (size_t anchor = 0; anchor < edges.size(); ++anchor)
+        {
+            if (usedIndex[anchor])
+                continue;
+            intervals.clear();
+            intervalIndices.clear();
+            for (size_t candidate = 0; candidate < edges.size(); ++candidate)
+            {
+                if (anchor == candidate || usedIndex[candidate])
+                    continue;
+                const float sourceDx =
+                    edges[candidate].first.x() - edges[anchor].first.x();
+                const float sourceDy =
+                    edges[candidate].first.y() - edges[anchor].first.y();
+                const float sourceDistance =
+                    std::sqrtf(sourceDx * sourceDx + sourceDy * sourceDy);
+                const float targetDx =
+                    edges[candidate].second.x() - edges[anchor].second.x();
+                const float targetDy =
+                    edges[candidate].second.y() - edges[anchor].second.y();
+                const float targetDistance =
+                    std::sqrtf(targetDx * targetDx + targetDy * targetDy);
+                if (std::fabs(sourceDistance - targetDistance) >= resolution)
+                    continue;
 
-		corsV.emplace_back(cors[i / 2]);
-		indicesV.emplace_back(i / 2);
-	}
-	//corsV = cors;
-	Edge2DSet edgeSet;
-	Edge2D edge;
+                const float halfWidth = 2.0f * resolution < sourceDistance
+                    ? asinf((2.0f * resolution) / sourceDistance)
+                    : static_cast<float>(M_PI);
+                const float sourceAngle = atan2f(sourceDy, sourceDx);
+                const float targetAngle = atan2f(targetDy, targetDx);
+                float theta = targetAngle - sourceAngle;
+                if (theta > M_PI)
+                    theta -= 2.0f * static_cast<float>(M_PI);
+                if (theta < -M_PI)
+                    theta += 2.0f * static_cast<float>(M_PI);
+                appendAngularInterval(
+                    theta,
+                    halfWidth,
+                    intervals,
+                    &intervalIndices,
+                    candidate);
+            }
+            if (intervals.size() < 2)
+                continue;
+            IntervalStabbing stabbing(intervals);
+            float* optimum = stabbing.getOptimalValue();
+            if (stabbing.getNStabbed() < 2)
+                continue;
 
-	for (unsigned int index = 0; index < corsV.size(); index++)
-	{
-		edge.first[0] = sampledCloudS->points[corsV[index].index_query].x;
-		edge.first[1] = sampledCloudS->points[corsV[index].index_query].y;
+            supportedIndices.clear();
+            supportedIndices.emplace_back(anchor);
+            for (size_t index = 0; index + 1 < intervals.size(); index += 2)
+            {
+                if (intervals[index].value > optimum[1])
+                    continue;
+                if (intervals[index + 1].value < optimum[0])
+                    continue;
+                supportedIndices.emplace_back(intervalIndices[index]);
+                if (enableAngleCandidatePruning &&
+                    (intervals[index + 1].value - intervals[index].value) <
+                        deltaAngle)
+                {
+                    usedIndex[intervalIndices[index]] = true;
+                }
+            }
+            if (supportedIndices.size() > result.maximumConsensusSize)
+            {
+                result.maximumConsensusSize = supportedIndices.size();
+                result.selectedIndices = supportedIndices;
+                result.optimalInterval[0] = optimum[0];
+                result.optimalInterval[1] = optimum[1];
+            }
+        }
 
-		edge.second[0] = sampledCloudT->points[corsV[index].index_match].x;
-		edge.second[1] = sampledCloudT->points[corsV[index].index_match].y;
-		edgeSet.emplace_back(edge);
-	}
+        result.correspondences.reserve(result.selectedIndices.size());
+        for (size_t index : result.selectedIndices)
+            result.correspondences.emplace_back(input[index]);
+        return result;
+    };
 
+    pcl::Correspondences corsR;
+    Edge2DSet edgeSet;
+    std::vector<size_t> indicesR;
+    std::array<float, 2> optimalRSet{ 0.0f, 0.0f };
+    size_t maxNum = 0;
+    auto stageEnd = stageStart;
 
-	IntervalW intervalR;
-	IntervalsW intervalRSet, finalIntervalRSet;
-	float angle1 = 0.0f, angle2 = 0.0f;
-	float theta = 0.0f, error1 = 0.0f, error2 = 0.0f;
-	float dx1 = 0.0f, dy1 = 0.0f, dx2 = 0.0f, dy2 = 0.0f;
-	float distance1 = 0.0f, distance2 = 0.0f;
-	std::vector<size_t> usedIndexSet;
-	std::vector<size_t> indicesR;
-	std::array<float,2> optimalRSet;
-	size_t corsNum = edgeSet.size();
-	size_t maxNum = 0;
-	float deltaAngle = 1.0 * 2 * M_PI / 180.0f;
+    if (!swapVerticalAndRotationStages)
+    {
+        const VerticalStageResult verticalResult = runVerticalStage(cors);
+        cors1 = verticalResult.correspondences;
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[0] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+        stageStart = stageEnd;
 
-	std::vector<bool> usedIndex(corsNum, false);
-	for (unsigned int i = 0; i < corsNum; i++)
-	{
-		if (usedIndex[i] == true) continue;
-		for (unsigned int j = 0; j < corsNum; j++)
-		{
-			if (i == j)
-				continue;
-			if (usedIndex[j] == true)
-				continue;
-			dx1 = edgeSet[j].first.x() - edgeSet[i].first.x();
-			dy1 = edgeSet[j].first.y() - edgeSet[i].first.y();
-			distance1 = std::sqrtf(dx1 * dx1 + dy1 * dy1);
-			dx2 = edgeSet[j].second.x() - edgeSet[i].second.x();
-			dy2 = edgeSet[j].second.y() - edgeSet[i].second.y();
-			distance2 = std::sqrtf(dx2 * dx2 + dy2 * dy2);
-			if (std::abs(distance1 - distance2) < resolution)
-			{
-				if (2 * resolution < distance1)
-					error1 = asin(2 * resolution / distance1);
-				else
-					error1 = M_PI;
-				
-				//error2 = 2 * resolution / distance1;
-				angle1 = atan2f(dy1, dx1);
-				angle2 = atan2f(dy2, dx2);
-				theta = angle2 - angle1;
-				if (theta > M_PI)
-					theta = theta - 2 * M_PI;
-				if (theta < -M_PI)
-					theta = theta + 2 * M_PI;
-				intervalR.is_left = true;
-				intervalR.value = theta - error1;
-				intervalR.index = j;
-				intervalRSet.emplace_back(intervalR);
-				intervalR.is_left = false;
-				intervalR.value = theta + error1;
-				intervalR.index = j;
-				intervalRSet.emplace_back(intervalR);
-			}
-		}
-		if (intervalRSet.size() < 2)
-		{
-			intervalRSet.clear();
-			continue;
-		}
+        const RotationStageResult rotationResult = runRotationStage(cors1);
+        cors2 = rotationResult.correspondences;
+        corsR = cors2;
+        edgeSet = buildEdges(cors1);
+        indicesR = rotationResult.selectedIndices;
+        optimalRSet = rotationResult.optimalInterval;
+        maxNum = rotationResult.maximumConsensusSize;
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[1] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+    }
+    else
+    {
+        const RotationStageResult rotationResult = runRotationStage(cors);
+        cors1 = rotationResult.correspondences;
+        optimalRSet = rotationResult.optimalInterval;
+        maxNum = rotationResult.maximumConsensusSize;
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[0] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+        stageStart = stageEnd;
 
-		std::shared_ptr<IntervalStabbing> interR = std::make_shared<IntervalStabbing>(intervalRSet);
-		float* RSet = interR->getOptimalValue();
-		if (interR->getNStabbed() < 2)
-		{
-			intervalRSet.clear();
-			continue;
-		}
-		usedIndexSet.clear();
-		usedIndexSet.emplace_back(i);
+        const VerticalStageResult verticalResult = runVerticalStage(cors1);
+        cors2 = verticalResult.correspondences;
+        corsR = cors2;
+        edgeSet = buildEdges(cors1);
+        indicesR = verticalResult.selectedIndices;
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[1] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+    }
 
-		for (size_t k = 0; k < intervalRSet.size() - 1; k += 2)
-		{
-			if (intervalRSet[k].value > RSet[1])
-				continue;
-			if (intervalRSet[k + 1].value < RSet[0])
-				continue;
-			usedIndexSet.emplace_back(intervalRSet[k].index);
-			//if ((intervalRSet[k + 1].value - intervalRSet[k].value)< deltaAngle)
-			//	usedIndex[intervalRSet[k].index] = true;
+    if (verbose)
+    {
+        std::cout << "Stage I correspondences: " << cors1.size() << '\n';
+        std::cout << "Stage II correspondences: " << cors2.size() << '\n';
+        std::cout << "rotation interval: [" << optimalRSet[0] << ", "
+            << optimalRSet[1] << "], consensus: " << maxNum << std::endl;
+    }
 
-			//relationshipTable[i][intervalRSet[k].index] = 0;
-			//relationshipTable[intervalRSet[k].index][i] = 0;
-		}
-		intervalRSet.clear();
-		if (maxNum < usedIndexSet.size())
-		{
-			maxNum = usedIndexSet.size();
-			indicesR = usedIndexSet;
-			optimalRSet[0] = RSet[0];
-			optimalRSet[1] = RSet[1];
-			//std::cout << optimalRSet[0] << "," << optimalRSet[1] << std::endl;
-		}
-	}
+    if (corsR.empty())
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: rotation stage produced no valid correspondences." << std::endl;
+        return;
+    }
 
+    stageStart = std::chrono::steady_clock::now();
 
-	//std::vector<std::vector<uint8_t>> relationshipTable(corsNum, std::vector<uint8_t>(corsNum, 1));
-	//for (size_t i = 0; i < corsNum; i++)
-	//{
-	//	if (std::accumulate(relationshipTable[i].begin(), relationshipTable[i].end(), 1) < maxNum)
-	//		continue;
-	//	for (size_t j = 0; j < corsNum; j++)
-	//	{
-	//		if (relationshipTable[i][j] == 0)
-	//			continue;
+    // compute rotation midpoint and rotation matrix
+    float optimalR = (optimalRSet[0] + optimalRSet[1]) * 0.5f;
+    Eigen::Matrix2f rotation;
+    const float cr = std::cos(optimalR), sr = std::sin(optimalR);
+    rotation << cr, -sr, sr, cr;
 
-	//		dx1 = edgeSet[j].first.x() - edgeSet[i].first.x();
-	//		dy1 = edgeSet[j].first.y() - edgeSet[i].first.y();
-	//		distance1 = std::sqrtf(dx1 * dx1 + dy1 * dy1);
-	//		dx2 = edgeSet[j].second.x() - edgeSet[i].second.x();
-	//		dy2 = edgeSet[j].second.y() - edgeSet[i].second.y();
-	//		distance2 = std::sqrtf(dx2 * dx2 + dy2 * dy2);
-	//		if (std::abs(distance1 - distance2) < (2 * resolution))
-	//		{
-	//			error1 = 2 * resolution / distance1;
-	//			if (error1 > M_PI)
-	//				continue;
-	//			//if (resolution < distance1)
-	//			//	error1 = asinf(resolution / distance1);
-	//			//else
-	//			//	error1 = M_PI;
+    // L-stage: compute pointSet and intervals
+    std::vector<Eigen::Vector2f> pointSet;
+    pointSet.reserve(indicesR.size());
+    Intervals intervalLSet;
+    for (size_t idx = 0; idx < indicesR.size(); ++idx)
+    {
+        const auto& e = edgeSet[indicesR[idx]];
+        Eigen::Vector2f p = e.second - rotation * e.first;
+        pointSet.emplace_back(p);
 
-	//			//if (resolution < distance2)
-	//			//	error2 = asinf(resolution / distance2);
-	//			//else
-	//			//	error2 = M_PI;
+        Interval il;
+        il.is_left = true;
+        il.value = p.norm() - resolution;
+        intervalLSet.emplace_back(il);
+        il.is_left = false;
+        il.value = p.norm() + resolution;
+        intervalLSet.emplace_back(il);
+    }
 
-	//			//if (error2 > M_PI)
-	//			//	continue;
-	//			angle1 = atan2f(dy1, dx1);
-	//			angle2 = atan2f(dy2, dx2);
-	//			theta = angle2 - angle1;
-	//			if (theta > M_PI)
-	//				theta = theta - 2 * M_PI;
-	//			if (theta < -M_PI)
-	//				theta = theta + 2 * M_PI;
-	//			intervalR.is_left = true;
-	//			intervalR.value = theta - error1 /*- error2*/;
-	//			intervalR.index = j;
-	//			intervalRSet.emplace_back(intervalR);
-	//			intervalR.is_left = false;
-	//			intervalR.value = theta + error1/* + error2*/;
-	//			intervalR.index = j;
-	//			intervalRSet.emplace_back(intervalR);
-	//		}
-	//		else
-	//		{
-	//			relationshipTable[i][j] = 0;
-	//			relationshipTable[j][i] = 0;
-	//		}
-	//	}
-	//	if (intervalRSet.size() < 2)
-	//	{
-	//		intervalRSet.clear();
-	//		continue;
-	//	}
+    std::shared_ptr<IntervalStabbing> interL = std::make_shared<IntervalStabbing>(intervalLSet);
+    float* optimalLSet = interL->getOptimalValue();
 
-	//	std::shared_ptr<IntervalStabbing> interR = std::make_shared<IntervalStabbing>(intervalRSet);
-	//	float* RSet = interR->getOptimalValue();
-	//	if (interR->getNStabbed() < 2)
-	//	{
-	//		intervalRSet.clear();
-	//		continue;
-	//	}
-	//	usedIndexSet.clear();
-	//	usedIndexSet.emplace_back(i);
+    if (interL->getNStabbed() <= 0.0f)
+    {
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[2] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+        if (verbose)
+            std::cerr << "Decoupling stopped: translation-length stage produced no valid interval." << std::endl;
+        return;
+    }
 
-	//	for (size_t k = 0; k < intervalRSet.size(); k += 2)
-	//	{
-	//		if (intervalRSet[k].value > RSet[1])
-	//			continue;
-	//		if (intervalRSet[k + 1].value < RSet[0])
-	//			continue;
-	//		usedIndexSet.emplace_back(intervalRSet[k].index);
-	//		relationshipTable[i][intervalRSet[k].index] = 0;
-	//		relationshipTable[intervalRSet[k].index][i] = 0;
-	//	}
-	//	for (size_t k = 0; k < usedIndexSet.size() - 1; k++)
-	//	{
-	//		for (size_t l = k + 1; l < usedIndexSet.size(); l++)
-	//		{
-	//			relationshipTable[usedIndexSet[k]][usedIndexSet[l]] = 0;
-	//			relationshipTable[usedIndexSet[l]][usedIndexSet[k]] = 0;
-	//		}
-	//	}
-	//	intervalRSet.clear();
-	//	if (maxNum < usedIndexSet.size())
-	//	{
-	//		maxNum = usedIndexSet.size();
-	//		indicesR = usedIndexSet;
-	//		optimalRSet[0] = RSet[0];
-	//		optimalRSet[1] = RSet[1];
-	//	}
-	//}
+    pcl::Correspondences corsL;
+    std::vector<size_t> indicesL;
+    for (size_t i = 0; i < intervalLSet.size(); i += 2)
+    {
+        if (intervalLSet[i].value > optimalLSet[1]) continue;
+        if (intervalLSet[i + 1].value < optimalLSet[0]) continue;
+        corsL.emplace_back(corsR[i / 2]);
+        indicesL.emplace_back(i / 2);
+    }
+	cors3 = corsL; // store scale inliers as cors3
+	// intervalLSet stores p.norm() +/- resolution, so its midpoint is already a length.
+	// Taking another square root changes the unit and can invalidate the next acos call.
+	const float optimalL = std::max(0.0f, (optimalLSet[0] + optimalLSet[1]) * 0.5f);
+    horizontalTranslationLength = optimalL;
+    stageEnd = std::chrono::steady_clock::now();
+    stageTimesSeconds[2] =
+        std::chrono::duration<double>(stageEnd - stageStart).count();
+    stageStart = stageEnd;
+    if (verbose)
+        std::cout << "intervalLSet size: " << intervalLSet.size() << ", optimalLSet: [" << optimalLSet[0] << ", " << optimalLSet[1] << "], nStabbed: " << interL->getNStabbed() << std::endl;
+    // T-stage
+    Intervals intervalTSet;
+    std::vector<size_t> intervalTIndices;
+    for (size_t idx = 0; idx < indicesL.size(); ++idx)
+    {
+        const Eigen::Vector2f& pv = pointSet[indicesL[idx]];
+        const float angleT = atan2f(pv.y(), pv.x());
+        const float pointNorm = pv.norm();
+        const float numer = pointNorm * pointNorm + optimalL * optimalL - resolution * resolution;
+        const float denom = 2.0f * pointNorm * optimalL;
 
-	//size_t inlierMaxNum = 0, outlierMaxNum = 0;
+        constexpr float numericTolerance = 1e-5f;
+        float error1 = 0.0f;
 
-	//std::vector<size_t> freeIndexSet(corsNum);
-	//// 使用std::iota来填充vector，从0到n-1
-	//size_t first = 0, second = 0;
-	//std::iota(freeIndexSet.begin(), freeIndexSet.end(), 0);
-	//for (size_t i = 0; i < freeIndexSet.size(); i++)
-	//{
-	//	first = freeIndexSet[i];
-	//	for (size_t j = 0; j < freeIndexSet.size(); j++)
-	//	{
-	//		second = freeIndexSet[j];
-	//		//if (i >= j)
-	//		//	continue;
-	//		dx1 = edgeSet[second].first.x() - edgeSet[first].first.x();
-	//		dy1 = edgeSet[second].first.y() - edgeSet[first].first.y();
-	//		distance1 = std::sqrtf(dx1 * dx1 + dy1 * dy1);
-	//		dx2 = edgeSet[second].second.x() - edgeSet[first].second.x();
-	//		dy2 = edgeSet[second].second.y() - edgeSet[first].second.y();
-	//		distance2 = std::sqrtf(dx2 * dx2 + dy2 * dy2);
-	//		if (std::abs(distance1 - distance2) < (2 * resolution))
-	//		{
-	//			error1 = 2 * resolution / distance2;
-	//			if (error1 > M_PI)
-	//				continue;
-	//			error2 = 2 * resolution / distance2;
-	//			if (error2 > M_PI)
-	//				continue;
-	//			angle1 = atan2f(dy1, dx1);
-	//			angle2 = atan2f(dy2, dx2);
-	//			theta = angle2 - angle1;
-	//			if (theta > M_PI)
-	//				theta = theta - 2 * M_PI;
-	//			if (theta < -M_PI)
-	//				theta = theta + 2 * M_PI;
-	//			intervalR.is_left = true;
-	//			intervalR.value = theta /*- error1*/ - error2;
-	//			intervalR.index = j;
-	//			intervalRSet.emplace_back(intervalR);
-	//			intervalR.is_left = false;
-	//			intervalR.value = theta /*+ error1*/ + error2;
-	//			intervalR.index = j;
-	//			intervalRSet.emplace_back(intervalR);
-	//		}
-	//	}
+        if (denom <= std::numeric_limits<float>::epsilon())
+        {
+            // A zero-length vector has no direction. Accept all angles only if
+            // the remaining length constraint is still feasible.
+            if (std::fabs(pointNorm - optimalL) > resolution)
+                continue;
+            error1 = static_cast<float>(M_PI);
+        }
+        else
+        {
+            float acosArgument = numer / denom;
+            if (!std::isfinite(acosArgument) || acosArgument > 1.0f + numericTolerance)
+                continue;
 
-	//	if (intervalRSet.size() < 4)
-	//		continue;
-	//	std::shared_ptr<IntervalStabbing> interR = std::make_shared<IntervalStabbing>(intervalRSet);
-	//	float* RSet = interR->getOptimalValue();
-	//	if (interR->getNStabbed() < 3 || interR->getNStabbed() < inlierMaxNum)
-	//	{
-	//		if (outlierMaxNum < interR->getNStabbed())
-	//		{
-	//			finalIntervalRSet.swap(intervalRSet);
-	//			outlierMaxNum = interR->getNStabbed();
-	//		}
-	//		intervalRSet.clear();
-	//		continue;
-	//	}
+            if (acosArgument < -1.0f - numericTolerance)
+            {
+                error1 = static_cast<float>(M_PI);
+            }
+            else
+            {
+                // Clamp only small floating-point drift; infeasible constraints
+                // have already been rejected above.
+                acosArgument = std::clamp(acosArgument, -1.0f, 1.0f);
+                error1 = std::acos(acosArgument);
+            }
+        }
 
-	//	usedIndexSet.clear();
-	//	i--;
-	//	usedIndexSet.emplace_back(first);
+        appendAngularInterval(
+            angleT,
+            error1,
+            intervalTSet,
+            &intervalTIndices,
+            idx);
+    }
 
-	//	for (size_t k = 0; k < intervalRSet.size(); k += 2)
-	//	{
-	//		if (intervalRSet[k].value > RSet[1])
-	//			continue;
-	//		if (intervalRSet[k + 1].value < RSet[0])
-	//			continue;
-	//		usedIndexSet.emplace_back(intervalRSet[k].index);
-	//	}
-	//	intervalRSet.clear();
-	//	if (inlierMaxNum < usedIndexSet.size())
-	//	{
-	//		inlierMaxNum = usedIndexSet.size();
-	//		indicesR = usedIndexSet;
-	//		optimalRSet[0] = RSet[0];
-	//		optimalRSet[1] = RSet[1];
-	//	}
-	//	std::vector<size_t> difference;
-	//	std::set_difference(freeIndexSet.begin(), freeIndexSet.end(),
-	//		usedIndexSet.begin(), usedIndexSet.end(),
-	//		std::back_inserter(difference));
-	//	if (inlierMaxNum > freeIndexSet.size())
-	//		break;
-	//	freeIndexSet.swap(difference);
-	//}
-	//if (indicesR.size() == 0)
-	//{
-	//	std::shared_ptr<IntervalStabbing> interR = std::make_shared<IntervalStabbing>(finalIntervalRSet);
-	//	float* RSet = interR->getOptimalValue();
-	//	for (size_t k = 0; k < finalIntervalRSet.size(); k += 2)
-	//	{
-	//		if (finalIntervalRSet[k].value > RSet[1])
-	//			continue;
-	//		if (finalIntervalRSet[k + 1].value < RSet[0])
-	//			continue;
-	//		indicesR.emplace_back(finalIntervalRSet[k].index);
-	//	}
-	//	optimalRSet[0] = RSet[0];
-	//	optimalRSet[1] = RSet[1];
-	//}
+    if (intervalTSet.empty())
+    {
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[3] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+        if (verbose)
+            std::cerr << "Decoupling stopped: translation-direction stage produced no valid interval." << std::endl;
+        return;
+    }
 
+    std::shared_ptr<IntervalStabbing> interT = std::make_shared<IntervalStabbing>(intervalTSet);
+    float* optimalTSet = interT->getOptimalValue();
 
+    if (interT->getNStabbed() <= 0.0f)
+    {
+        stageEnd = std::chrono::steady_clock::now();
+        stageTimesSeconds[3] =
+            std::chrono::duration<double>(stageEnd - stageStart).count();
+        if (verbose)
+            std::cerr << "Decoupling stopped: translation-direction stage found no consensus." << std::endl;
+        return;
+    }
 
-	pcl::Correspondences corsR;
-	for (size_t i = 0; i < indicesR.size(); i++)
-	{
-		corsR.emplace_back(corsV[indicesR[i]]);
-	}
+    corsRes.clear();
+    corsRes.reserve(intervalTSet.size() / 2);
+    for (size_t i = 0; i < intervalTSet.size(); i += 2)
+    {
+        if (intervalTSet[i].value > optimalTSet[1]) continue;
+        if (intervalTSet[i + 1].value < optimalTSet[0]) continue;
+        corsRes.emplace_back(corsL[intervalTIndices[i]]);
+    }
+    stageEnd = std::chrono::steady_clock::now();
+    stageTimesSeconds[3] =
+        std::chrono::duration<double>(stageEnd - stageStart).count();
+    auto timeE = std::chrono::system_clock::now();
+    if (verbose)
+    {
+        std::cout << "Time consumption of decouping: "
+            << double(std::chrono::duration_cast<std::chrono::microseconds>(timeE - timeS).count()) / 1e6
+            << " s\n";
+        std::cout << "corsRes: " << corsRes.size() << std::endl;
+    }
 
-	//auto timeA = std::chrono::system_clock::now();
+    if (corsRes.size() < 3)
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: fewer than three correspondences remain for 4-DOF estimation." << std::endl;
+        return;
+    }
 
-	//std::cout << "Time consumption of Stag II: " <<
-	//	double(std::chrono::duration_cast<std::chrono::microseconds>
-	//		(timeA - timeS).count()) / 1000000.0 << std::endl;
+    Eigen::Vector3d sourceCentroid = Eigen::Vector3d::Zero();
+    Eigen::Vector3d targetCentroid = Eigen::Vector3d::Zero();
+    for (const auto& correspondence : corsRes)
+    {
+        const auto& sourcePoint = sampledCloudS->points[correspondence.index_query];
+        const auto& targetPoint = sampledCloudT->points[correspondence.index_match];
+        sourceCentroid += Eigen::Vector3d(sourcePoint.x, sourcePoint.y, sourcePoint.z);
+        targetCentroid += Eigen::Vector3d(targetPoint.x, targetPoint.y, targetPoint.z);
+    }
+    sourceCentroid /= static_cast<double>(corsRes.size());
+    targetCentroid /= static_cast<double>(corsRes.size());
 
-	float directionT = 0.0f, directionS = 0.0f;
-	//std::cout << optimalRSet[0] << "," << optimalRSet[1] << std::endl;
-	float optimalR = (optimalRSet[0] + optimalRSet[1]) / 2;
+    double dotSum = 0.0;
+    double crossSum = 0.0;
+    for (const auto& correspondence : corsRes)
+    {
+        const auto& sourcePoint = sampledCloudS->points[correspondence.index_query];
+        const auto& targetPoint = sampledCloudT->points[correspondence.index_match];
+        const double sourceX = sourcePoint.x - sourceCentroid.x();
+        const double sourceY = sourcePoint.y - sourceCentroid.y();
+        const double targetX = targetPoint.x - targetCentroid.x();
+        const double targetY = targetPoint.y - targetCentroid.y();
+        dotSum += sourceX * targetX + sourceY * targetY;
+        crossSum += sourceX * targetY - sourceY * targetX;
+    }
 
-	Interval intervalL;
-	Intervals intervalLSet;
-	Eigen::Matrix2f rotation;
-	rotation << cos(optimalR), -sin(optimalR), sin(optimalR), cos(optimalR);
+    if (!std::isfinite(dotSum) || !std::isfinite(crossSum) ||
+        std::hypot(dotSum, crossSum) <= std::numeric_limits<double>::epsilon())
+    {
+        if (verbose)
+            std::cerr << "Decoupling stopped: degenerate 4-DOF rotation estimate." << std::endl;
+        return;
+    }
 
-	std::vector<Eigen::Vector2f> pointSet;
-	Eigen::Vector2f point;
+    const double refinedYaw = std::atan2(crossSum, dotSum);
+    Eigen::Matrix3d refinedRotation = Eigen::Matrix3d::Identity();
+    refinedRotation(0, 0) = std::cos(refinedYaw);
+    refinedRotation(0, 1) = -std::sin(refinedYaw);
+    refinedRotation(1, 0) = std::sin(refinedYaw);
+    refinedRotation(1, 1) = std::cos(refinedYaw);
 
-	for (size_t i = 0; i < indicesR.size(); i++)
-	{
-		point = edgeSet[indicesR[i]].second - rotation * edgeSet[indicesR[i]].first;
-		pointSet.emplace_back(point);
-
-		intervalL.is_left = true;
-		intervalL.value = point.norm() - resolution;
-		intervalLSet.emplace_back(intervalL);
-		intervalL.is_left = false;
-		intervalL.value = point.norm() + resolution;
-		intervalLSet.emplace_back(intervalL);
-	}
-
-	std::shared_ptr<IntervalStabbing> interL = std::make_shared<IntervalStabbing>(intervalLSet);
-	float* optimalLSet = interL->getOptimalValue();
-
-	pcl::Correspondences corsL;
-	std::vector<size_t> indicesL;
-	for (size_t i = 0; i < intervalLSet.size(); i += 2)
-	{
-		if (intervalLSet[i].value > optimalLSet[1])
-			continue;
-		if (intervalLSet[i + 1].value < optimalLSet[0])
-			continue;
-
-		corsL.emplace_back(corsR[i / 2]);
-		indicesL.emplace_back(i / 2);
-	}
-
-	float optimalL = std::sqrtf((optimalLSet[0] + optimalLSet[1]) / 2);
-
-	Interval intervalT;
-	Intervals intervalTSet;
-	float angleT = 0.0f;
-
-	for (size_t i = 0; i < indicesL.size(); i++)
-	{
-		angleT = atan2f(pointSet[indicesL[i]].y(), pointSet[indicesL[i]].x());
-		error1 = acosf((pointSet[indicesL[i]].squaredNorm() + std::powf(optimalL, 2) - std::powf(resolution, 2))
-			/ (2 * pointSet[indicesL[i]].norm() * optimalL));
-		
-		intervalT.is_left = true;
-		intervalT.value = angleT - error1 /*- error2*/;
-		intervalTSet.emplace_back(intervalT);
-		intervalT.is_left = false;
-		intervalT.value = angleT + error1 /*+ error2*/;
-		intervalTSet.emplace_back(intervalT);
-	}
-
-	std::shared_ptr<IntervalStabbing> interT = std::make_shared<IntervalStabbing>(intervalTSet);
-	float* optimalTSet = interT->getOptimalValue();
-	float optimalT = (optimalTSet[0] + optimalTSet[1]) / 2;
-	//optimalTSet[0] = 2.830f;
-	//optimalTSet[1] = 2.860f;
-
-	//pcl::Correspondences corsT;
-	//std::vector<size_t> indicesT;
-	for (size_t i = 0; i < intervalTSet.size(); i += 2)
-	{
-		if (intervalTSet[i].value > optimalTSet[1])
-			continue;
-		if (intervalTSet[i + 1].value < optimalTSet[0])
-			continue;
-
-		corsRes.emplace_back(corsL[i / 2]);
-		indicesL.emplace_back(indicesR[i / 2]);
-	}
-	auto timeE = std::chrono::system_clock::now();
-	std::cout << "Time consumption of decouping: " <<
-		double(std::chrono::duration_cast<std::chrono::microseconds>
-			(timeE - timeS).count()) / 1000000.0 << std::endl;
-
-	std::cout << "corsRes: " << corsRes.size() << std::endl;
-	pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ, double> te;
-	te.estimateRigidTransformation(*sampledCloudS, *sampledCloudT, corsRes, transformation);
-
+    transformation.setIdentity();
+    transformation.block<3, 3>(0, 0) = refinedRotation;
+    transformation.block<3, 1>(0, 3) =
+        targetCentroid - refinedRotation * sourceCentroid;
+    valid = transformation.allFinite();
 }
-
-void Decoupling::decoupling2(PointCloudPtr sampledCloudS, PointCloudPtr sampledCloudT, pcl::Correspondences cors, float resolution)
-{
-	std::cout << "==================Decoupling .....==================" << std::endl;
-	auto timeS = std::chrono::system_clock::now();
-
-	Intervals verticalTSet;
-	Interval verticalT;
-
-	Eigen::Vector3f s_t(0.0f, 0.0f, 0.0f);
-	Eigen::Vector3f g(0.0f, 0.0f, 1.0f);
-	for (unsigned int index = 0; index < cors.size(); index++)
-	{
-		s_t[0] = sampledCloudT->points[cors[index].index_match].x - sampledCloudS->points[cors[index].index_query].x;
-		s_t[1] = sampledCloudT->points[cors[index].index_match].y - sampledCloudS->points[cors[index].index_query].y;
-		s_t[2] = sampledCloudT->points[cors[index].index_match].z - sampledCloudS->points[cors[index].index_query].z;
-		//s_tSet[index] = s_t;
-
-		verticalT.value = -resolution - g.dot(s_t);
-		verticalT.is_left = true;
-		//verticalT.weight = weightInfor[index];
-		verticalTSet.emplace_back(verticalT);
-
-		verticalT.value = resolution - g.dot(s_t);
-		verticalT.is_left = false;
-		//verticalT.weight = weightInfor[index];
-		verticalTSet.emplace_back(verticalT);
-	}
-
-	std::shared_ptr<IntervalStabbing> interV = std::make_shared<IntervalStabbing>(verticalTSet);
-
-	float* optimalZSet = interV->getOptimalValue();
-	//optimalZSet[0] = 1.40f;
-	//optimalZSet[1] = 1.45f;
-	pcl::Correspondences corsV;
-	std::vector<size_t> indicesV;
-
-	for (size_t i = 0; i < verticalTSet.size(); i += 2)
-	{
-		if (verticalTSet[i].value > optimalZSet[1])
-			continue;
-		if (verticalTSet[i + 1].value < optimalZSet[0])
-			continue;
-
-		corsV.emplace_back(cors[i / 2]);
-		indicesV.emplace_back(i / 2);
-	}
-
-	Edge2DSet edgeSet;
-	Edge2D edge;
-
-	for (unsigned int index = 0; index < corsV.size(); index++)
-	{
-		edge.first[0] = sampledCloudS->points[corsV[index].index_query].x;
-		edge.first[1] = sampledCloudS->points[corsV[index].index_query].y;
-
-		edge.second[0] = sampledCloudT->points[corsV[index].index_match].x;
-		edge.second[1] = sampledCloudT->points[corsV[index].index_match].y;
-		edgeSet.emplace_back(edge);
-	}
-
-	//求方向
-
-	Intervals horizontalLSet;
-	Interval horizontalL;
-
-	for (unsigned int index = 0; index < edgeSet.size(); index++)
-	{
-		horizontalL.is_left = true;
-		horizontalL.value = std::abs(edgeSet[index].first.norm() - edgeSet[index].second.norm()) - resolution;
-		horizontalLSet.emplace_back(horizontalL);
-		horizontalL.is_left = false;
-		horizontalL.value = edgeSet[index].first.norm() + edgeSet[index].second.norm() + resolution;
-		horizontalLSet.emplace_back(horizontalL);
-	}
-
-	std::shared_ptr<IntervalStabbing> interL = std::make_shared<IntervalStabbing>(horizontalLSet);
-
-	float* optimalLSet = interL->getOptimalValue();
-
-	std::cout << optimalLSet[0] << "," << optimalLSet[1] << std::endl;
-}
-
-void Decoupling::computeTransformationMatrix(PointCloudPtr sampledCloudS, PointCloudPtr sampledCloudT)
-{
-
-	Eigen::Matrix4f transformation_matrix;
-	pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ> te;
-	te.estimateRigidTransformation(*sampledCloudS, *sampledCloudT, corsRes, transformation_matrix);
-
-	std::cout << "transformation matrix before ICP: \n" << transformation_matrix << std::endl;
-}
-
-

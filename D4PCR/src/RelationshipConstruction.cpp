@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <liblas/liblas.hpp>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
@@ -12,6 +13,10 @@ RelationshipConstruction::RelationshipConstruction(std::string pathS, std::strin
 {
 	loadPointCloudFile(pathS, _inputCloudS);
 	loadPointCloudFile(pathT, _inputCloudT);
+	if (!_inputCloudS || !_inputCloudT || _inputCloudS->empty() || _inputCloudT->empty())
+		throw std::runtime_error("D4PCR input point cloud is empty or could not be loaded.");
+	if (!std::isfinite(resolution) || resolution <= 0.0f)
+		throw std::invalid_argument("D4PCR resolution must be positive.");
 
 	if (getcenter)
 	{
@@ -167,6 +172,13 @@ void RelationshipConstruction::loadPointCloudFile(std::string path, PointCloudPt
 	{
 		PCL_ERROR("Unsupported file format: %s\n", ext.c_str());
 	}
+	cloud->points.erase(std::remove_if(cloud->points.begin(), cloud->points.end(),
+		[](const pcl::PointXYZ& point) {
+			return !std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z);
+		}), cloud->points.end());
+	cloud->width = static_cast<std::uint32_t>(cloud->size());
+	cloud->height = 1;
+	cloud->is_dense = true;
 }
 
 void RelationshipConstruction::getCenter(PointCloudPtr input, Eigen::Vector3d& center)

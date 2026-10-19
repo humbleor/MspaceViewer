@@ -7,6 +7,7 @@
 #include <QFileDialog>
 #include <QTextEdit>
 #include <QPointer>
+#include <QComboBox>
 #include <functional>
 #include <QtWidgets/QProgressDialog>
 #include <QtConcurrent/QtConcurrent>
@@ -48,9 +49,13 @@ private:
 		QString outputDir;
 		bool isCenter;
 		float resolution_dis;
+		bool globalOptimization{ false };
+		QString pointCloudDirectory;
 	};
 
 	static void registration(ORRRegParams params, QPointer<QTextEdit> logger,
 		std::function<void(int, const QString&)> reportProgress);
+	QComboBox* _registrationMode{ nullptr };
+	QLineEdit* _pointCloudDirectory{ nullptr };
 
 };

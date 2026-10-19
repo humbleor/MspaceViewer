@@ -15,6 +15,7 @@ set(UI_FILES
 
 # ── Forest_TLS_Reg 核心源文件（直接编译进 MainWindow）──
 set(FOREST_REG_SOURCES
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/ForestPairRegistration.cpp
     ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Hlp.cpp
     ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/HashRegObj.cpp
     ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/GenAlg.cpp
@@ -64,6 +65,65 @@ add_executable(MspaceViewer
     ${UI_FILES}
     resource/MainWindow.qrc
 )
+
+# Keep the embedded catalogs synchronized with TS sources in every build.
+get_target_property(_translation_qt_core Qt6::Core IMPORTED_LOCATION)
+cmake_path(GET _translation_qt_core PARENT_PATH _translation_qt_bin)
+find_program(MSPACE_LRELEASE NAMES lrelease.exe lrelease HINTS "${_translation_qt_bin}" REQUIRED)
+set(_mspace_translation_files)
+foreach(_language zh en)
+    set(_ts "${CMAKE_CURRENT_SOURCE_DIR}/resource/MainWindow_${_language}.ts")
+    set(_qm "${CMAKE_CURRENT_SOURCE_DIR}/resource/MainWindow_${_language}.qm")
+    add_custom_command(OUTPUT "${_qm}"
+        COMMAND "${MSPACE_LRELEASE}" "${_ts}" -qm "${_qm}"
+        DEPENDS "${_ts}"
+        VERBATIM)
+    list(APPEND _mspace_translation_files "${_qm}")
+endforeach()
+add_custom_target(MspaceTranslations DEPENDS ${_mspace_translation_files})
+add_dependencies(MspaceViewer MspaceTranslations)
+set_property(TARGET MspaceViewer APPEND PROPERTY AUTOGEN_TARGET_DEPENDS MspaceTranslations)
+
+if(D4PCR_ENABLE_GLOBAL_OPTIMIZATION)
+    add_dependencies(MspaceViewer D4PCRGlobalOptimization)
+endif()
+
+option(FOREST_ENABLE_GLOBAL_OPTIMIZATION "Build Forest + GICP + GTSAM global registration" ON)
+if(FOREST_ENABLE_GLOBAL_OPTIMIZATION)
+    if(NOT TARGET gtsam)
+        find_package(GTSAM CONFIG REQUIRED)
+    endif()
+    add_executable(ForestGlobalOptimization
+        ${CMAKE_SOURCE_DIR}/cli/ForestGlobalOptimizationMain.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/ForestGlobalRegistration.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/ForestGlobalIO.cpp
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/ForestLasExport.cpp
+        ${FOREST_REG_SOURCES})
+    target_include_directories(ForestGlobalOptimization PRIVATE
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/include
+        ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/thirdParty/CSF-master/src
+        ${libLAS_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS}
+        ${PCL_ROOT}/3rdParty/FLANN/include)
+    target_link_libraries(ForestGlobalOptimization PRIVATE
+        Qt6::Core gtsam small_gicp opencv_world
+        PCL::common PCL::io PCL::filters PCL::features PCL::registration
+        PCL::search PCL::kdtree PCL::segmentation
+        ${libLAS_LIBRARY} ${libLAS_C_LIBRARY} Boost::regex Boost::serialization OpenMP::OpenMP_CXX)
+    set_target_properties(ForestGlobalOptimization PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/runtime")
+    if(MSVC)
+        target_compile_options(ForestGlobalOptimization PRIVATE /utf-8 /bigobj)
+    endif()
+    target_compile_definitions(MspaceViewer PRIVATE FOREST_HAS_GLOBAL_OPTIMIZATION=1)
+    add_dependencies(MspaceViewer ForestGlobalOptimization)
+    install(TARGETS ForestGlobalOptimization RUNTIME DESTINATION runtime)
+endif()
+
+if(MSVC)
+    set_source_files_properties(src/OutlierRemovalRegistration.cpp src/ForestRegistration.cpp
+        PROPERTIES COMPILE_OPTIONS "/utf-8")
+endif()
 
 target_include_directories(MspaceViewer
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -121,6 +181,22 @@ set_target_properties(MspaceViewer PROPERTIES
     AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/resource"
 )
 
+option(BUILD_D4PCR_GUI_SMOKE "Build the D4PCR GUI integration smoke test" OFF)
+
+if(D4PCR_ENABLE_GLOBAL_OPTIMIZATION AND BUILD_D4PCR_GUI_SMOKE)
+    add_executable(D4PCRGuiSmoke EXCLUDE_FROM_ALL
+        ${CMAKE_SOURCE_DIR}/D4PCR/test/src/GuiIntegrationSmoke.cpp
+        src/OutlierRemovalRegistration.cpp
+        include/OutlierRemovalRegistration.h
+        resource/OutlierRemovalRegistration.ui)
+    target_include_directories(D4PCRGuiSmoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(D4PCRGuiSmoke PRIVATE D4PCR Qt6::Widgets Qt6::Concurrent)
+    add_dependencies(D4PCRGuiSmoke D4PCRGlobalOptimization)
+    set_target_properties(D4PCRGuiSmoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/resource")
+endif()
+
 
 
 # ── 运行时拷贝翻译文件和 OSG 插件 ──
@@ -141,6 +217,27 @@ add_custom_command(TARGET MspaceViewer POST_BUILD
     COMMAND_EXPAND_LISTS
     COMMENT "Copying runtime DLL dependencies..."
 )
+
+# GTSAM links against vcpkg Boost; PCL carries another Boost build. Copy the
+# vcpkg release DLLs too, including dependencies hidden by PCL's imported targets.
+if(D4PCR_ENABLE_GLOBAL_OPTIMIZATION OR FOREST_ENABLE_GLOBAL_OPTIMIZATION)
+    if(VCPKG_INSTALLED_DIR)
+        set(_d4pcr_runtime_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    elseif(GTSAM_RELEASE_ROOT)
+        set(_d4pcr_runtime_root "${GTSAM_RELEASE_ROOT}")
+    else()
+        set(_d4pcr_runtime_root "F:/vcpkg/installed/x64-windows-release")
+    endif()
+    file(GLOB _d4pcr_runtime_dlls CONFIGURE_DEPENDS "${_d4pcr_runtime_root}/bin/*.dll")
+    if(_d4pcr_runtime_dlls)
+        add_custom_command(TARGET MspaceViewer POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_d4pcr_runtime_dlls} "$<TARGET_FILE_DIR:MspaceViewer>"
+            COMMAND_EXPAND_LISTS
+            COMMENT "Copying GTSAM and vcpkg runtime dependencies...")
+        install(FILES ${_d4pcr_runtime_dlls} DESTINATION .)
+    endif()
+endif()
 
 # ── 拷贝 PCL 间接依赖 DLL（未通过链接链传递的）──
 set(_PCL_MISSING_DLLS

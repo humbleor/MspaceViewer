@@ -1,6 +1,16 @@
 #include "../include/ForestRegistration.h"
 #include "../include/AsyncRegistration.h"
 #include <QScrollBar>
+#include "../include/RegistrationProcess.h"
+#include <QComboBox>
+#include <QStackedWidget>
+#include <QDoubleSpinBox>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QDir>
+#include <QFileInfo>
+#include <cmath>
 
 // Forest_TLS_Reg headers
 #ifndef _HLP_H_Included_
@@ -26,6 +36,7 @@
 #include <pcl/common/transforms.h>
 
 #include <algorithm>
+#include "utils/ForestPairRegistration.h"
 
 static void logToLoggerForest(QPointer<QTextEdit> logger, const QString& text)
 {
@@ -37,6 +48,40 @@ ForestRegistration::ForestRegistration(QWidget* parent)
 	Ui::ForestRegistration()
 {
 	this->setupUi(this);
+	_registrationMode = new QComboBox(this);
+	_registrationMode->setObjectName("_registrationMode");
+	_registrationMode->addItem(tr("双点云配准（Forest + GICP）"));
+#ifdef FOREST_HAS_GLOBAL_OPTIMIZATION
+	_registrationMode->addItem(tr("多点云全局优化（Forest + GICP + GTSAM）"));
+#endif
+	verticalLayout->insertWidget(0, _registrationMode);
+	auto* globalGroup = new QGroupBox(tr("多点云输入目录（LAS / PCD / PLY）"), this);
+	auto* globalLayout = new QVBoxLayout(globalGroup);
+	auto* directoryRow = new QHBoxLayout;
+	_pointCloudDirectory = new QLineEdit(globalGroup);
+	_pointCloudDirectory->setObjectName("_pointCloudDirectory");
+	auto* selectDirectory = new QPushButton(tr("选择目录"), globalGroup);
+	selectDirectory->setObjectName("_selectPointCloudDirectory");
+	directoryRow->addWidget(_pointCloudDirectory); directoryRow->addWidget(selectDirectory);
+	globalLayout->addLayout(directoryRow);
+	auto* outputRow = new QHBoxLayout;
+	outputRow->addWidget(new QLabel(tr("LAS 合并点云分辨率（m，0 = 原始点）："), globalGroup));
+	_mergeResolution = new QDoubleSpinBox(globalGroup);
+	_mergeResolution->setObjectName("_mergeResolution");
+	_mergeResolution->setDecimals(3); _mergeResolution->setRange(0, 10); _mergeResolution->setSingleStep(0.05); _mergeResolution->setValue(0.05);
+	outputRow->addWidget(_mergeResolution); globalLayout->addLayout(outputRow);
+	// The stack reserves the maximum size of both input pages. Switching modes
+	// changes only the visible page, keeping the dialog geometry stable.
+	verticalLayout->removeWidget(groupBox);
+	auto* inputPages = new QStackedWidget(this);
+	inputPages->addWidget(groupBox);
+	inputPages->addWidget(globalGroup);
+	verticalLayout->insertWidget(1, inputPages);
+	connect(selectDirectory, &QPushButton::clicked, this, [this]() {
+		const QString dir = QFileDialog::getExistingDirectory(this, tr("选择点云目录"));
+		if (!dir.isEmpty()) _pointCloudDirectory->setText(dir);
+	});
+	connect(_registrationMode, &QComboBox::currentIndexChanged, inputPages, &QStackedWidget::setCurrentIndex);
 
 	connect(_selectInputFileOfSource, &QPushButton::clicked, this, &ForestRegistration::selectInputFileOfSource);
 	connect(_selectInputFileOfTarget, &QPushButton::clicked, this, &ForestRegistration::selectInputFileOfTarget);
@@ -45,6 +90,13 @@ ForestRegistration::ForestRegistration(QWidget* parent)
 	connect(_action_cancel, &QPushButton::clicked, this, &ForestRegistration::reject);
 
 	initParam();
+	// Use a common initial size, while allowing the user to resize the dialog.
+	// The stacked pages keep that user-selected size when changing modes.
+	setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, false);
+	setWindowFlag(Qt::WindowMaximizeButtonHint, true);
+	setSizeGripEnabled(true);
+	verticalLayout->setSizeConstraint(QLayout::SetDefaultConstraint);
+	resize(QSize(760, 450).expandedTo(minimumSizeHint()));
 }
 
 ForestRegistration::~ForestRegistration()
@@ -90,24 +142,53 @@ void ForestRegistration::selectOutputDir()
 bool ForestRegistration::executeRegistration(QProgressDialog* progress, QTextEdit* logger,
 	std::function<void()> onFinished)
 {
-	if (_inputFileOfSource->text().isEmpty() ||
-		_inputFileOfTarget->text().isEmpty() ||
-		_outputFileOfDir->text().isEmpty())
-		return false;
-
 	ForestRegParams params;
 	params.sourceFile = _inputFileOfSource->text();
 	params.targetFile = _inputFileOfTarget->text();
 	params.outputDir = _outputFileOfDir->text();
-	params.descriptorNearNum = _descriptorNearNum->text().toDouble();
-	params.descriptorMinLen  = _descriptorMinLen->text().toDouble();
-	params.descriptorMaxLen  = _descriptorMaxLen->text().toDouble();
-	params.disGeoVerify      = _disGeoVerify->text().toDouble();
-	params.icpThreshold      = _icpThreshold->text().toDouble();
-	params.normalGeoVerify   = _normalGeoVerify->text().toDouble();
+	bool numeric = true;
+	const auto readNumber = [&numeric](QLineEdit* edit) { bool ok = false; double v = edit->text().toDouble(&ok); numeric = numeric && ok; return v; };
+	params.descriptorNearNum = readNumber(_descriptorNearNum);
+	params.descriptorMinLen  = readNumber(_descriptorMinLen);
+	params.descriptorMaxLen  = readNumber(_descriptorMaxLen);
+	params.disGeoVerify      = readNumber(_disGeoVerify);
+	params.icpThreshold      = readNumber(_icpThreshold);
+	params.normalGeoVerify   = readNumber(_normalGeoVerify);
+	params.globalOptimization = _registrationMode->currentIndex() == 1;
+	params.pointCloudDirectory = _pointCloudDirectory->text().trimmed();
+	params.mergeResolution = _mergeResolution->value();
+	if (!numeric || params.outputDir.trimmed().isEmpty() ||
+		(params.globalOptimization ? !QDir(params.pointCloudDirectory).exists() || params.pointCloudDirectory.isEmpty() :
+			!QFileInfo(params.sourceFile).isFile() || !QFileInfo(params.targetFile).isFile()) ||
+		!std::isfinite(params.icpThreshold) || params.icpThreshold < 0 || params.icpThreshold > 1 ||
+		!std::isfinite(params.descriptorNearNum) || params.descriptorNearNum < 3 || params.descriptorNearNum > 100 || std::floor(params.descriptorNearNum) != params.descriptorNearNum ||
+		!std::isfinite(params.descriptorMinLen) || params.descriptorMinLen <= 0 ||
+		!std::isfinite(params.descriptorMaxLen) || params.descriptorMaxLen <= params.descriptorMinLen ||
+		!std::isfinite(params.disGeoVerify) || params.disGeoVerify <= 0 ||
+		!std::isfinite(params.normalGeoVerify) || params.normalGeoVerify < 0 || params.normalGeoVerify > 2)
+	{
+		QMessageBox::warning(this, tr("参数错误"), tr("请选择有效输入、输出目录，并检查配准参数。"));
+		return false;
+	}
+	if (!QDir().mkpath(params.outputDir)) {
+		QMessageBox::warning(this, tr("参数错误"), tr("无法创建输出目录。")); return false;
+	}
 
 	if (!progress)
 		return false;
+#ifdef FOREST_HAS_GLOBAL_OPTIMIZATION
+	if (params.globalOptimization) {
+		const auto number = [](double v) { return QString::number(v, 'g', 12); };
+		return registrationui::startProcess(progress, logger,
+			QCoreApplication::applicationDirPath() + "/runtime/ForestGlobalOptimization.exe",
+			{"--input", QDir(params.pointCloudDirectory).absolutePath(), "--output", QDir(params.outputDir).absolutePath(),
+			 "--coarse-score", number(params.icpThreshold), "--neighbors", number(params.descriptorNearNum),
+			 "--min-edge-length", number(params.descriptorMinLen), "--max-edge-length", number(params.descriptorMaxLen),
+			 "--geo-distance", number(params.disGeoVerify), "--normal-difference", number(params.normalGeoVerify),
+			 "--merge-resolution", number(params.mergeResolution), "--gui-progress"},
+			"FOREST_PROGRESS\t", params.outputDir, std::move(onFinished));
+	}
+#endif
 	registrationui::start(progress, logger, tr("Loading forest point clouds ..."),
 		std::move(onFinished), [params](QPointer<QTextEdit> loggerGuard, registrationui::ProgressReporter report) {
 			registration(params, loggerGuard, report);
@@ -131,7 +212,7 @@ void ForestRegistration::initParam()
 	_descriptorMinLen->setText("2.0");
 	_descriptorMaxLen->setText("50.0");
 	_disGeoVerify->setText("0.3");
-	_icpThreshold->setText("0.3");
+	_icpThreshold->setText("0.25");
 	_normalGeoVerify->setText("1.0");
 }
 
@@ -225,91 +306,20 @@ void ForestRegistration::registration(ForestRegParams params, QPointer<QTextEdit
 		}
 		logToLoggerForest(logger, tr("Source points: %1\n").arg(source_cloud->size()));
 
-		// --- Step 3: Generate descriptors for target ---
-		logToLoggerForest(logger, tr("Generating triangle descriptors for target cloud...") + "\n");
-		reportProgress(20, tr("Generating target triangle descriptors ..."));
-		HashRegDescManager* hashReg = nullptr;
-		try {
-			hashReg = new HashRegDescManager(config_setting);
-		} catch (const std::exception& e) {
-			logToLoggerForest(logger, tr("Error creating HashRegDescManager: ") + QString::fromUtf8(e.what()) + "\n");
-			return;
-		}
-
-		FrameInfo reference_info;
-		try {
-			hashReg->GenTriDescs(target_cloud, reference_info);
-			hashReg->AddTriDescs(reference_info);
-		} catch (const std::exception& e) {
-			logToLoggerForest(logger, tr("Error generating target descriptors: ") + QString::fromUtf8(e.what()) + "\n");
-			delete hashReg;
-			return;
-		}
-		logToLoggerForest(logger, tr("Target descriptors: %1\n").arg(reference_info.desc_.size()));
-
-		// --- Step 4: Generate descriptors for source ---
-		logToLoggerForest(logger, tr("Generating triangle descriptors for source cloud...") + "\n");
-		reportProgress(40, tr("Generating source triangle descriptors ..."));
-		FrameInfo source_info;
-		try {
-			hashReg->GenTriDescs(source_cloud, source_info);
-		} catch (const std::exception& e) {
-			logToLoggerForest(logger, tr("Error generating source descriptors: ") + QString::fromUtf8(e.what()) + "\n");
-			delete hashReg;
-			return;
-		}
-		logToLoggerForest(logger, tr("Source descriptors: %1\n").arg(source_info.desc_.size()));
-
-		// --- Step 5: Search for matching triangle pairs (coarse registration) ---
-		logToLoggerForest(logger, tr("Searching for matching triangle pairs...") + "\n");
-		reportProgress(60, tr("Searching matching triangle pairs ..."));
-		std::pair<int, double> search_result(-1, 0);
-		std::pair<Eigen::Vector3d, Eigen::Matrix3d> coarse_transform;
-		coarse_transform.first << 0, 0, 0;
-		coarse_transform.second = Eigen::Matrix3d::Identity();
-		std::vector<std::pair<TriDesc, TriDesc>> loop_triangle_pair;
-
-		try {
-			hashReg->SearchPosition(source_info, search_result, coarse_transform, loop_triangle_pair);
-		} catch (const std::exception& e) {
-			logToLoggerForest(logger, tr("Error during search: ") + QString::fromUtf8(e.what()) + "\n");
-			delete hashReg;
-			return;
-		}
-
-		if (search_result.first == -1)
-		{
-			logToLoggerForest(logger, tr("Warning: No matching triangles found. Skipping coarse registration.\n"));
-			delete hashReg;
-			return;
-		}
-
-		logToLoggerForest(logger, tr("Match found! Frame ID: %1, Score: %2\n").arg(search_result.first).arg(search_result.second, 0, 'f', 4));
-
-		// --- Step 6: Fine registration (small_gicp) ---
-		logToLoggerForest(logger, tr("Performing fine registration (Small-GICP)...") + "\n");
-		reportProgress(75, tr("Refining registration with Small-GICP ..."));
-		std::pair<Eigen::Vector3d, Eigen::Matrix3d> refine_transform;
-		try {
-			small_gicp_registration(source_cloud, target_cloud, refine_transform);
-		} catch (const std::exception& e) {
-			logToLoggerForest(logger, tr("Error during fine registration: ") + QString::fromUtf8(e.what()) + "\n");
-			delete hashReg;
-			return;
-		}
-		logToLoggerForest(logger, tr("Fine registration completed.\n"));
-
-		// --- Step 7: Combine transforms ---
-		Eigen::Matrix4d final_matrix = Eigen::Matrix4d::Identity();
-		Eigen::Matrix4d coarse_matrix = Eigen::Matrix4d::Identity();
-		coarse_matrix.block<3, 3>(0, 0) = coarse_transform.second;
-		coarse_matrix.block<3, 1>(0, 3) = coarse_transform.first;
-
-		Eigen::Matrix4d refine_matrix = Eigen::Matrix4d::Identity();
-		refine_matrix.block<3, 3>(0, 0) = refine_transform.second;
-		refine_matrix.block<3, 1>(0, 3) = refine_transform.first;
-
-		final_matrix = refine_matrix * coarse_matrix;
+        const auto result = forest::registerPair(source_cloud, target_cloud, config_setting,
+            [logger, reportProgress](int progress, const std::string& message) {
+                const auto text = QString::fromStdString(message);
+                logToLoggerForest(logger, text + "\n");
+                reportProgress(progress, text);
+            });
+        const auto reportName = std::filesystem::path(sourceFile).stem().string() + "_to_" +
+            std::filesystem::path(targetFile).stem().string() + "_forest_quality.txt";
+        forest::savePairReport((std::filesystem::path(outputDir) / reportName).string(), result);
+        if (!result.accepted) {
+            logToLoggerForest(logger, "Forest registration rejected: " + QString::fromStdString(result.reason) + "\n");
+            return;
+        }
+        const Eigen::Matrix4d final_matrix = result.transform;
 
 		// --- Step 8: Save transformation matrix ---
 		std::filesystem::path sourcePath(sourceFile);
@@ -321,7 +331,6 @@ void ForestRegistration::registration(ForestRegParams params, QPointer<QTextEdit
 		if (!dataOut)
 		{
 			logToLoggerForest(logger, tr("Failed to create transformation matrix file!\n"));
-			delete hashReg;
 			return;
 		}
 
@@ -362,7 +371,8 @@ void ForestRegistration::registration(ForestRegParams params, QPointer<QTextEdit
 		logToLoggerForest(logger, tr("===================================\n"));
 		logToLoggerForest(logger, tr("Forest registration completed!\n"));
 
-		delete hashReg;
+	} catch (const std::exception& e) {
+        logToLoggerForest(logger, "Forest registration failed: " + QString::fromUtf8(e.what()) + "\n");
 	} catch (...) {
 		logToLoggerForest(logger, tr("Unknown exception occurred during registration!\n"));
 	}

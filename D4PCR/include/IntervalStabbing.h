@@ -24,11 +24,10 @@ private:
 
 private:
 	//std::vector<std::pair<float, size_t>> _dataSet;
-	float _optimalValue[2];
-	float _nStabbed;
+	float _optimalValue[2]{ 0.0f, 0.0f };
+	float _nStabbed{ 0.0f };
 };
 
 
 
 #endif // !_INTERVALSTABBING_H_
-

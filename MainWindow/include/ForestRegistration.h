@@ -13,16 +13,22 @@
 #include <fstream>
 #include <iomanip>
 #include <Eigen/Core>
+class QComboBox;
+class QLineEdit;
+class QDoubleSpinBox;
 
 struct ForestRegParams {
 	QString sourceFile;
 	QString targetFile;
 	QString outputDir;
+	QString pointCloudDirectory;
+	bool globalOptimization = false;
+	double mergeResolution = 0.05;
 	double descriptorNearNum = 10.0;
 	double descriptorMinLen = 2.0;
 	double descriptorMaxLen = 50.0;
 	double disGeoVerify = 0.3;
-	double icpThreshold = 0.3;
+	double icpThreshold = 0.25;
 	double normalGeoVerify = 1.0;
 };
 
@@ -43,6 +49,9 @@ private slots:
 	void selectOutputDir();
 
 private:
+	QComboBox* _registrationMode = nullptr;
+	QLineEdit* _pointCloudDirectory = nullptr;
+	QDoubleSpinBox* _mergeResolution = nullptr;
 	void initParam();
 	static void registration(ForestRegParams params, QPointer<QTextEdit> logger,
 		std::function<void(int, const QString&)> reportProgress);

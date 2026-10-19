@@ -7,6 +7,8 @@
 #include <atomic>
 #include <QtWidgets/QMessageBox>
 #include <QCloseEvent>
+#include <QActionGroup>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -68,8 +70,35 @@ void MainWindow::InitTree()
 
 void MainWindow::InitLanguage()
 {
-    chinese.load("./resource/MainWindow_zh.qm");
-    english.load("./resource/MainWindow_en.qm");
+    const bool hasChinese = chinese.load(":/translations/MainWindow_zh.qm");
+    const bool hasEnglish = english.load(":/translations/MainWindow_en.qm");
+    if (!hasChinese || !hasEnglish)
+        qWarning() << "Cannot load embedded interface translations";
+    ui._action_Chinese->setEnabled(hasChinese);
+    ui._action_English->setEnabled(hasEnglish);
+    auto* languages = new QActionGroup(this);
+    languages->setExclusive(true);
+    for (auto* action : {ui._action_Chinese, ui._action_English}) {
+        action->setCheckable(true);
+        languages->addAction(action);
+    }
+    ui._action_Chinese->setChecked(true);
+    if (hasChinese) qApp->installTranslator(&chinese);
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() != QEvent::LanguageChange) return;
+    ui.retranslateUi(this);
+    if (_dataMangementMenu && !_dataMangementMenu->actions().isEmpty())
+        _dataMangementMenu->actions().first()->setText(tr("delete"));
+    ui._ProPertyTable->setHorizontalHeaderLabels({tr("Property"), tr("Value")});
+    for (int row = 0; row < ui._ProPertyTable->rowCount(); ++row) {
+        auto* item = ui._ProPertyTable->item(row, 0);
+        if (item && item->data(Qt::UserRole).isValid())
+            item->setText(QCoreApplication::translate("MainWindow", item->data(Qt::UserRole).toByteArray().constData()));
+    }
 }
 
 void MainWindow::InitDataMangementMenu()
@@ -138,7 +167,7 @@ void MainWindow::LoadAndShowFiles(std::string inputFiles)
     {
         ui._Logger->insertPlainText(tr("Point cloud data loading and display failed!") + "\n");
     }
-    
+
 
 
 }
@@ -366,15 +395,21 @@ void MainWindow::registration_Position()
 
 void MainWindow::changeLanguage_Chinese()
 {
+    if (chinese.isEmpty()) return;
+    qApp->removeTranslator(&english);
+    qApp->removeTranslator(&chinese);
     qApp->installTranslator(&chinese);
-    ui.retranslateUi(this);
+    ui._action_Chinese->setChecked(true);
     output_English = false;
 }
 
 void MainWindow::changeLanguage_English()
 {
+    if (english.isEmpty()) return;
+    qApp->removeTranslator(&chinese);
+    qApp->removeTranslator(&english);
     qApp->installTranslator(&english);
-    ui.retranslateUi(this);
+    ui._action_English->setChecked(true);
     output_English = true;
 }
 
@@ -405,31 +440,34 @@ void MainWindow::updatePropertyPanel(const std::string& fileName, osg::ref_ptr<o
     QStringList properties;
     QStringList values;
 
-    properties << tr("File Name");
+    properties << "File Name";
     values << QString::fromStdString(std::filesystem::path(fileName).filename().string());
 
-    properties << tr("File Format");
+    properties << "File Format";
     values << QString::fromStdString(std::filesystem::path(fileName).extension().string());
 
     if (node.valid())
     {
         osg::BoundingSphere bs = node->getBound();
-        properties << tr("Center X") << tr("Center Y") << tr("Center Z");
+        properties << "Center X" << "Center Y" << "Center Z";
         values << QString::number(bs.center().x(), 'f', 4)
                << QString::number(bs.center().y(), 'f', 4)
                << QString::number(bs.center().z(), 'f', 4);
 
-        properties << tr("Bounding Radius");
+        properties << "Bounding Radius";
         values << QString::number(bs.radius(), 'f', 4);
     }
 
-    properties << tr("Children Count");
+    properties << "Children Count";
     values << QString::number(node->getNumChildren());
 
     ui._ProPertyTable->setRowCount(properties.size());
     for (int i = 0; i < properties.size(); i++)
     {
-        ui._ProPertyTable->setItem(i, 0, new QTableWidgetItem(properties[i]));
+        const auto source = properties[i].toUtf8();
+        auto* property = new QTableWidgetItem(QCoreApplication::translate("MainWindow", source.constData()));
+        property->setData(Qt::UserRole, source);
+        ui._ProPertyTable->setItem(i, 0, property);
         ui._ProPertyTable->setItem(i, 1, new QTableWidgetItem(values[i]));
     }
 }

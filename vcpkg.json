@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "MspaceViewer - LiDAR point cloud visualization and registration application",
   "dependencies": [
+    "gtsam",
+    "boost-signals2",
+    "boost-random",
     {
       "name": "osg",
       "default-features": false,
@@ -21,5 +24,9 @@
       "name": "boost-ptr-container",
       "default-features": false
     }
+  ],
+  "overrides": [
+    { "name": "eigen3", "version": "3.4.0", "port-version": 5 },
+    { "name": "gtsam", "version": "4.2.0", "port-version": 1 }
   ]
 }

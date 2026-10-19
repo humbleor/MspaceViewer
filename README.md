@@ -152,7 +152,7 @@ MspaceViewer/
 
 ```bash
 # 克隆 vcpkg
-cd D:/
+cd F:/
 git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg
 
@@ -162,7 +162,7 @@ cd vcpkg
 
 ### 第七步：安装 vcpkg 依赖
 
-在项目根目录运行下一节的 CMake 配置命令，vcpkg 清单模式会自动安装 `vcpkg.json` 中的依赖：
+全新安装或依赖清单变更时，显式使用 `cmake --preset windows-release -DVCPKG_MANIFEST_INSTALL=ON`。依赖包括：
 
 - `osg[freetype]`（禁用默认特性）— OpenSceneGraph
 - `liblas` — LAS 文件读写
@@ -180,7 +180,7 @@ cd vcpkg
 cd E:/Code/MspaceViewer
 
 # 1. 配置并生成 Visual Studio 工程（默认不编译 CLI 工具）
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=OFF
+cmake --preset windows-release -DBUILD_CLI_TOOLS=OFF
 
 # 2. 编译 Release 主程序及其依赖
 cmake --build build --config Release --target MspaceViewer
@@ -189,11 +189,11 @@ cmake --build build --config Release --target MspaceViewer
 默认 `BUILD_CLI_TOOLS=OFF`，只生成主程序及其依赖库，不生成 `OutlierRemovalRegCLI`、`TLSRegistrationCLI` 和 `ForestRegCLI`。需要编译 CLI 工具时，重新配置并设置为 `ON`：
 
 ```bash
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=ON
+cmake --preset windows-release -DBUILD_CLI_TOOLS=ON
 cmake --build build --config Release
 ```
 
-主程序输出路径：`build/bin/Release/MspaceViewer.exe`。若需构建包括 OSG 插件在内的全部目标，运行 `cmake --build build --config Release`。
+主程序输出路径：`build/bin/Release/MspaceViewer.exe`；多点云全局配准工人进程为 `runtime/D4PCRGlobalOptimization.exe` 和 `runtime/ForestGlobalOptimization.exe`（相对主程序目录）。若需构建包括 OSG 插件在内的全部目标，运行 `cmake --build build --config Release`。
 
 ### 使用 Visual Studio
 
@@ -271,6 +271,14 @@ Set-Location .\build\bin\Release
 
 矩阵文件可直接传给 `test/test_transform_compare.py` 的 `-m` 参数；脚本只读取前四行矩阵。该脚本还需要源和目标 XLSX 文件，以及 `numpy`、`openpyxl`、`matplotlib`、`scipy`。当前内置 XLSX 解析器要求 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet1.xml`，因此并非所有有效 XLSX 文件都能读取；遇到解析失败可改用 TXT/CSV。
 
+### Forest 多站全局配准
+
+Forest Registration 现在提供多点云模式：原始 LAS/PCD/PLY 特征提取 → 六自由度 GICP → 闭环检查 → GTSAM Pose3 → 统一参考站点云。
+默认匹配成功率门槛 0.25、合并输出分辨率 0.10 m，输出 `merged_global.las`；分辨率设为 0 可导出全部原始点。
+参考站以外的三个旋转分量均可优化，不读取 world_frame 或增加固定竖直方向约束。
+构建 MspaceViewer 会同时构建 runtime/ForestGlobalOptimization.exe，关闭进度窗口即可终止全局任务。
+详见 [Forest 全局配准说明](docs/Forest_global_registration.md)。
+
 ## 打包发布
 
 面向 Windows 用户的 ZIP 应作为 GitHub **Release** 的附件发布。GitHub 仓库页面的 **Packages** 用于包注册表，不是此桌面程序 ZIP 的发布入口；GitHub 自动生成的 Source code ZIP 也不是已编译程序。
@@ -278,7 +286,7 @@ Set-Location .\build\bin\Release
 项目使用 **CPack** 在本地生成 Release 配置的 ZIP。发布包若要包含三个 CLI，先启用 `BUILD_CLI_TOOLS=ON` 并构建全部目标：
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-release -DBUILD_CLI_TOOLS=ON
+cmake --preset windows-release -DBUILD_CLI_TOOLS=ON
 cmake --build build --config Release
 cmake --install build --config Release
 Push-Location build
@@ -286,7 +294,7 @@ cpack -C Release -G ZIP
 Pop-Location
 ```
 
-每条命令成功后再执行下一条。执行成功会在 `build/` 目录下生成 `MspaceViewer-1.0.0-win64.zip`，其中包含 `MspaceViewer.exe`、`OutlierRemovalRegCLI.exe`、`TLSRegistrationCLI.exe`、`ForestRegCLI.exe` 及运行依赖。`BUILD_CLI_TOOLS=OFF` 时不会构建或打包 CLI。发布前应在目标机器上验证启动和点云加载。
+每条命令成功后再执行下一条。执行成功会在 `build/` 目录下生成 `MspaceViewer-1.0.0-win64.zip`。默认（`BUILD_CLI_TOOLS=OFF`）含三个可执行文件：根目录的 `MspaceViewer.exe`、`runtime/D4PCRGlobalOptimization.exe` 和 `runtime/ForestGlobalOptimization.exe`（两个全局配准工人进程），以及运行依赖；启用 `BUILD_CLI_TOOLS=ON` 时另含 `cli/` 下的 `OutlierRemovalRegCLI.exe`、`TLSRegistrationCLI.exe`、`ForestRegCLI.exe`。发布前应在目标机器上验证启动和点云加载。
 
 ### 打包流程说明
 
@@ -300,7 +308,7 @@ Pop-Location
 
 | 来源 | 文件 |
 |------|------|
-| 项目目标 | MspaceViewer.exe、项目 DLL；启用 `BUILD_CLI_TOOLS=ON` 时另含三个 CLI 可执行文件 |
+| 项目目标 | `MspaceViewer.exe`、`runtime/D4PCRGlobalOptimization.exe`、`runtime/ForestGlobalOptimization.exe`、项目 DLL；启用 `BUILD_CLI_TOOLS=ON` 时另含 `cli/` 下三个 CLI 工具 |
 | vcpkg | OSG, libLAS, Boost, FreeType 等 DLL |
 | PCL | pcl_*.dll, VTK DLLs, FLANN DLL |
 | Qt6 | Qt6Core/Gui/Widgets/Concurrent/OpenGL 等 DLL |

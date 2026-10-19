@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-release",
+      "displayName": "MSVC Release",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "F:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_INSTALLED_DIR": "F:/vcpkg/project-installed/MspaceViewer",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-release",
+        "VCPKG_MANIFEST_INSTALL": "OFF",
+        "D4PCR_ENABLE_GLOBAL_OPTIMIZATION": "ON"
+      },
+      "environment": {
+        "VCPKG_ROOT": "F:/vcpkg",
+        "VCPKG_INSTALLATION_ROOT": "F:/vcpkg",
+        "VCPKG_DEFAULT_BINARY_CACHE": "F:/vcpkg/binary-cache",
+        "MSBUILDDISABLENODEREUSE": "1"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release",
+      "configuration": "Release",
+      "targets": ["MspaceViewer", "D4PCRGlobalOptimization"],
+      "jobs": 2,
+      "nativeToolOptions": ["/nr:false"]
+    }
+  ]
+}

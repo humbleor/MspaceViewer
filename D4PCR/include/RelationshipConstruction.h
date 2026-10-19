@@ -17,9 +17,10 @@ public:
 	Eigen::Vector3d getCenterT();
 	pcl::Correspondences getCorrespondences();
 
-private:
+	// 按扩展名加载 pcd / ply / las / laz 点云（供实验与测试程序复用同一加载逻辑）。
 	void loadPointCloudFile(std::string path, PointCloudPtr& cloud);
 
+private:
 	void getCenter(PointCloudPtr input, Eigen::Vector3d& center);
 	void downSamping(PointCloudPtr input, PointCloudPtr output, float resolution);
 	void keyPointExtration(PointCloudPtr inputCloud, IndicesPtr indices, PointCloudPtr outputCloud, float resolution);

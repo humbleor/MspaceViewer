@@ -339,6 +339,8 @@ void readTLSData(const std::string lasFile, pcl::PointCloud<pcl::PointXYZ>::Ptr 
     liblas::Reader reader = f.CreateWithStream(ifs);	// read las file
 	// the num of las file
     unsigned long int nbPoints=reader.GetHeader().GetPointRecordsCount();
+    // Avoid repeated reallocations for large TLS scans.
+    tlsPC->reserve(nbPoints);
     pcl::PointXYZ p;
 	while(reader.ReadNextPoint()) 
 	{

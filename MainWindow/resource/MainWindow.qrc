@@ -1,5 +1,7 @@
 <RCC>
     <qresource prefix="/">
         <file>ico/fe.png</file>
+        <file alias="translations/MainWindow_zh.qm">MainWindow_zh.qm</file>
+        <file alias="translations/MainWindow_en.qm">MainWindow_en.qm</file>
     </qresource>
 </RCC>

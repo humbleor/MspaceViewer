@@ -835,7 +835,13 @@ void HashRegDescManager::SearchPosition(
     } 
     else 
     { // the loop closure is failed
-        loop_result = std::pair<int, double>(-1, 0);
+        // Preserve diagnostics even when the acceptance threshold rejects it.
+        // Callers must still use first == -1 to identify a rejected match.
+        loop_result = std::pair<int, double>(-1, best_score);
+        if (!best_sucess_match_vec.empty()) {
+            loop_transform = best_transform;
+            loop_std_pair = best_sucess_match_vec;
+        }
         return;
     }
 }
@@ -1165,7 +1171,8 @@ void HashRegDescManager::build_stdesc(FrameInfo &curr_frame_info)
     curr_frame_info.desc_.clear();
     double scale = 1.0 / config_setting_.side_resolution;
     // parameters, nearest corner points, max and min length of triangle edges
-    int near_num = config_setting_.descriptor_near_num;
+    int near_num = std::min<int>(config_setting_.descriptor_near_num, curr_frame_info.currCenter->size());
+    if (near_num < 3) return;
     double max_dis_threshold = config_setting_.descriptor_max_len;
     double min_dis_threshold = config_setting_.descriptor_min_len;
     // the difference between neighbor sides of triangle (m) --> (cm)

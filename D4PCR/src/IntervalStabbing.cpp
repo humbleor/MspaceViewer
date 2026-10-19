@@ -2,16 +2,16 @@
 
 IntervalStabbing::IntervalStabbing(Intervals intervals)
 {
-	_nStabbed = 0.0f;
-	sortEndpoints(intervals);
-	compute(intervals);
+    _nStabbed = 0.0f;
+    sortEndpoints(intervals);
+    compute(intervals);
 }
 
 IntervalStabbing::IntervalStabbing(IntervalsW intervalsW)
 {
-	_nStabbed = 0.0f;
-	sortEndpoints(intervalsW);
-	compute(intervalsW);
+    _nStabbed = 0.0f;
+    sortEndpoints(intervalsW);
+    compute(intervalsW);
 }
 
 IntervalStabbing::~IntervalStabbing()
@@ -20,110 +20,115 @@ IntervalStabbing::~IntervalStabbing()
 
 void IntervalStabbing::sortEndpoints(Intervals& intervals)
 {
-	std::sort(intervals.begin(), intervals.end(), [](const Interval& a, const Interval& b) {
-		return (a.value < b.value); });
+    std::sort(intervals.begin(), intervals.end(), [](const Interval& a, const Interval& b) {
+        if (a.value < b.value)
+            return true;
+        if (a.value > b.value)
+            return false;
+
+        // For closed intervals, process a left endpoint first at an equal value.
+        if (a.is_left != b.is_left)
+            return a.is_left;
+        return false;
+        });
 }
 
 void IntervalStabbing::sortEndpoints(IntervalsW& intervalsW)
 {
-	std::sort(intervalsW.begin(), intervalsW.end(), [](const IntervalW& a, const IntervalW& b) {
-		return (a.value < b.value); });
+    std::sort(intervalsW.begin(), intervalsW.end(), [](const IntervalW& a, const IntervalW& b) {
+        if (a.value < b.value)
+            return true;
+        if (a.value > b.value)
+            return false;
+
+        if (a.is_left != b.is_left)
+            return a.is_left;
+        return false;
+        });
 }
-
-
 
 void IntervalStabbing::compute(Intervals& intervals)
 {
-	unsigned int nMax = /*2 **/ intervals.size();
-	//_dataSet.resize(nMax);
+    const size_t nMax = intervals.size();
 
-	int count = 0;
-	int optimalIndex = 0;
-	//float optimalVauleL = 0.0f;
-	//float optimalVauleR = 0.0f;
+    if (nMax < 2)
+    {
+        _nStabbed = 0.0f;
+        _optimalValue[0] = 0.0f;
+        _optimalValue[1] = 0.0f;
+        return;
+    }
 
-	//std::ofstream dataFile;
-	//dataFile.open("test.txt", std::ofstream::out);
+    float bestCount = _nStabbed;
+    size_t optimalIndex = 0;
+    float count = 0.0f;
 
-	for (unsigned int i = 0; i < nMax; i++)
-	{
-		if (intervals[i].is_left)
-		{
-			count++;
-			if (count > _nStabbed)
-			{
-				_nStabbed = count;
-				optimalIndex = i;
-				//optimalVauleL = intervals[i].value;
-				//optimalVauleR = intervals[i + 1].value;
-			}
-		}
-		else
-		{
-			count--;
-		}
+    for (size_t i = 0; i < nMax; ++i)
+    {
+        if (intervals[i].is_left)
+        {
+            ++count;
+            if (count > bestCount)
+            {
+                bestCount = count;
+                optimalIndex = i;
+            }
+        }
+        else
+        {
+            --count;
+        }
+    }
 
-		//_dataSet[i] = std::make_pair(intervals[i].value, count);
-		/*dataFile << intervals[i].value << " " << count << std::endl;*/
-		//std::cout <<"the interval of parallel length is: "<< _intervals[i].first << "  ";
-		//std::cout << "the count is: " << count << "." << std::endl;;
-	}
-
-	/*dataFile.close();*/
-	_optimalValue[0] = intervals[optimalIndex].value;
-	_optimalValue[1] = intervals[optimalIndex + 1].value;
+    _nStabbed = bestCount;
+    _optimalValue[0] = intervals[optimalIndex].value;
+    _optimalValue[1] = intervals[std::min(optimalIndex + 1, nMax - 1)].value;
 }
 
 void IntervalStabbing::compute(IntervalsW& intervalsW)
 {
-	unsigned int nMax = /*2 **/ intervalsW.size();
-	//_dataSet.resize(nMax);
+    const size_t nMax = intervalsW.size();
 
-	float count = 0.0f;
-	int optimalIndex = 0;
-	//float optimalVauleL = 0.0f;
-	//float optimalVauleR = 0.0f;
+    if (nMax < 2)
+    {
+        _nStabbed = 0.0f;
+        _optimalValue[0] = 0.0f;
+        _optimalValue[1] = 0.0f;
+        return;
+    }
 
-	for (unsigned int i = 0; i < nMax; i++)
-	{
-		if (intervalsW[i].is_left)
-		{
-			count++;
-			if (count > _nStabbed)
-			{
-				_nStabbed = count;
-				optimalIndex = i;
-				//optimalVauleL = intervals[i].value;
-				//optimalVauleR = intervals[i + 1].value;
-			}
-		}
-		else
-		{
-			count--;
-		}
+    float bestCount = _nStabbed;
+    size_t optimalIndex = 0;
+    float count = 0.0f;
 
-		//_dataSet[i] = std::make_pair(intervals[i].value, count);
-		/*dataFile << intervals[i].value << " " << count << std::endl;*/
-		//std::cout <<"the interval of parallel length is: "<< _intervals[i].first << "  ";
-		//std::cout << "the count is: " << count << "." << std::endl;;
-	}
+    for (size_t i = 0; i < nMax; ++i)
+    {
+        if (intervalsW[i].is_left)
+        {
+            ++count;
+            if (count > bestCount)
+            {
+                bestCount = count;
+                optimalIndex = i;
+            }
+        }
+        else
+        {
+            --count;
+        }
+    }
 
-	/*dataFile.close();*/
-	_optimalValue[0] = intervalsW[optimalIndex].value;
-	_optimalValue[1] = intervalsW[optimalIndex + 1].value;
+    _nStabbed = bestCount;
+    _optimalValue[0] = intervalsW[optimalIndex].value;
+    _optimalValue[1] = intervalsW[std::min(optimalIndex + 1, nMax - 1)].value;
 }
 
 float* IntervalStabbing::getOptimalValue()
 {
-	return _optimalValue;
+    return _optimalValue;
 }
 
 float IntervalStabbing::getNStabbed()
 {
-	return _nStabbed;
+    return _nStabbed;
 }
-
-//std::vector<std::pair<float, size_t>> IntervalStabbing::getDataSet()
-//{
-//	return _dataSet;
-//}

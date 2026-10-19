@@ -78,16 +78,42 @@ endif()
 # but does NOT include regex — we add it manually from PCL's Boost lib directory
 # ═══════════════════════════════════════════════════
 if(NOT TARGET Boost::regex)
-    find_library(BOOST_REGEX_LIBRARY
-        NAMES boost_regex
-        PATHS "${PCL_ROOT}/3rdParty/Boost/lib"
-        NO_DEFAULT_PATH
-        REQUIRED
-    )
+    # PCL 自带的 Boost 库带版本后缀（libboost_regex-vc143-mt-x64-1_84.lib），
+    # 因此不能只按 boost_regex 这个名字查找，需要按实际文件名匹配。
+    set(_boost_lib_dir "${PCL_ROOT}/3rdParty/Boost/lib")
+    file(GLOB _boost_regex_candidates "${_boost_lib_dir}/libboost_regex-vc*-x64-*.lib")
+    list(APPEND _boost_regex_candidates "${_boost_lib_dir}/boost_regex.lib")
+
+    set(BOOST_REGEX_LIBRARY "")
+    set(_boost_regex_debug_library "")
+    foreach(_candidate ${_boost_regex_candidates})
+        if(NOT EXISTS "${_candidate}")
+            continue()
+        endif()
+        if(_candidate MATCHES "-mt-gd-")
+            if(NOT _boost_regex_debug_library)
+                set(_boost_regex_debug_library "${_candidate}")
+            endif()
+        elseif(NOT BOOST_REGEX_LIBRARY)
+            set(BOOST_REGEX_LIBRARY "${_candidate}")
+        endif()
+    endforeach()
+
+    if(NOT BOOST_REGEX_LIBRARY)
+        set(BOOST_REGEX_LIBRARY "${_boost_regex_debug_library}")
+    endif()
+    if(NOT BOOST_REGEX_LIBRARY)
+        message(FATAL_ERROR "boost_regex not found under ${_boost_lib_dir}")
+    endif()
+
     add_library(Boost::regex UNKNOWN IMPORTED)
     set_target_properties(Boost::regex PROPERTIES
         IMPORTED_LOCATION "${BOOST_REGEX_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIR}")
+    if(_boost_regex_debug_library)
+        set_target_properties(Boost::regex PROPERTIES
+            IMPORTED_LOCATION_DEBUG "${_boost_regex_debug_library}")
+    endif()
     message(STATUS "Boost::regex (from PCL): ${BOOST_REGEX_LIBRARY}")
 endif()
 
@@ -133,7 +159,7 @@ find_library(libLAS_LIBRARY_PATH NAMES liblas)
 find_library(libLAS_C_LIBRARY_PATH NAMES liblas_c)
 if(NOT libLAS_INCLUDE_DIR OR NOT libLAS_LIBRARY_PATH)
     message(FATAL_ERROR "libLAS not found. Ensure vcpkg manifest mode is active:\n"
-                        "  cmake .. -DCMAKE_TOOLCHAIN_FILE=D:/vcpkg/scripts/buildsystems/vcpkg.cmake\n"
+                        "  cmake --preset windows-release\n"
                         "           -DVCPKG_TARGET_TRIPLET=x64-windows-release")
 endif()
 
@@ -172,6 +198,12 @@ if(NOT TARGET small_gicp)
             PUBLIC Eigen3::Eigen
             PUBLIC OpenMP::OpenMP_CXX
         )
+        if(MSVC)
+            # Match the PCL All-in-One / GTSAM Eigen allocation ABI, including
+            # every caller of the Eigen-valued small_gicp interfaces.
+            target_compile_options(small_gicp PUBLIC /arch:AVX2)
+            target_compile_definitions(small_gicp PUBLIC EIGEN_HAS_CXX17_OVERALIGN=0)
+        endif()
         message(STATUS "small_gicp: embedded at ${SMALL_GICP_DIR}")
     else()
         message(FATAL_ERROR "small_gicp not found at ${SMALL_GICP_DIR}")
@@ -197,7 +229,7 @@ if(BUILD_CLI_TOOLS)
     add_executable(OutlierRemovalRegCLI ${CMAKE_SOURCE_DIR}/cli/OutlierRemovalRegCLI.cpp)
     target_link_libraries(OutlierRemovalRegCLI D4PCR ${PCL_LIBRARIES} Eigen3::Eigen)
     set_target_properties(OutlierRemovalRegCLI PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/cli"
     )
 
     # ── TLSRegistration CLI tool (TLS↔TLS diamond + FPFH + ICP) ──
@@ -215,13 +247,14 @@ if(BUILD_CLI_TOOLS)
         Boost::boost
     )
     set_target_properties(TLSRegistrationCLI PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/cli"
     )
 
     # ── ForestReg CLI tool (HashRegDescManager coarse + small_gicp fine) ──
     # Mirrors MainWindow/src/ForestRegistration.cpp minus Qt. Compiles the same
     # FOREST_REG_SOURCES that MainWindow bundles so the algorithm stays in sync.
     add_executable(ForestRegCLI ${CMAKE_SOURCE_DIR}/cli/ForestRegCLI.cpp
+    ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/ForestPairRegistration.cpp
         ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/Hlp.cpp
         ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/HashRegObj.cpp
         ${CMAKE_SOURCE_DIR}/Forest_TLS_Reg/src/utils/GenAlg.cpp
@@ -257,7 +290,7 @@ if(BUILD_CLI_TOOLS)
         OpenMP::OpenMP_CXX
     )
     set_target_properties(ForestRegCLI PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/cli"
     )
 endif()
 
@@ -276,11 +309,11 @@ install(TARGETS MspaceViewer MspaceOctree laszip osgQt osgdb_bin D4PCR ULS-TLS T
 
 if(BUILD_CLI_TOOLS)
     install(TARGETS OutlierRemovalRegCLI TLSRegistrationCLI ForestRegCLI
-        RUNTIME DESTINATION .)
+        RUNTIME DESTINATION cli)
 endif()
 
 # ── Resource directories ──
-install(FILES "${CMAKE_SOURCE_DIR}/README.md" DESTINATION .)
+# README is repository documentation and is not part of the binary distribution.
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/MainWindow/resource"
     DESTINATION .
     FILES_MATCHING PATTERN "*.qm" PATTERN "*.ts" PATTERN "*.ui" PATTERN "*.qrc"
@@ -311,7 +344,7 @@ install(DIRECTORY "${_qt_bin_dir}/../plugins/platforms"
 
 # ── Third-party DLLs ──
 # vcpkg installed directory (OSG, libLAS, Boost, freetype, etc)
-set(VCPKG_BIN_DIR "${CMAKE_SOURCE_DIR}/build/vcpkg_installed/x64-windows-release/bin")
+set(VCPKG_BIN_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
 file(GLOB _VCPKG_DLLS "${VCPKG_BIN_DIR}/*.dll")
 list(FILTER _VCPKG_DLLS EXCLUDE REGEX "_d\\.dll$")
 install(FILES ${_VCPKG_DLLS} DESTINATION .)
@@ -330,6 +363,7 @@ set(_PCL_INSTALL_DLLS
     "${PCL_ROOT}/bin/pcl_sample_consensus.dll"
     "${PCL_ROOT}/bin/pcl_search.dll"
     "${PCL_ROOT}/bin/pcl_segmentation.dll"
+    "${PCL_ROOT}/bin/pcl_visualization.dll"
 )
 install(FILES ${_PCL_INSTALL_DLLS} DESTINATION .)
 
